@@ -1,11 +1,11 @@
-# KidControl-Code
+# KidControl Code
 
-Dieses Verzeichnis ist für die spätere Implementierung vorgesehen.
+This directory is reserved for the future implementation.
 
-Noch nicht entschieden sind insbesondere:
+The following decisions are still open:
 
-- genaue Node.js-Version und SQLite-Bibliothek;
-- technische Kopplung an `pyatv`;
-- Framework oder bewusst frameworkarme Umsetzung der WebUI.
+- the exact Node.js version and SQLite library;
+- the technical integration with `pyatv`;
+- a framework or an intentionally framework-light WebUI implementation.
 
-Vor Beginn der Implementierung werden diese Punkte anhand kleiner, isolierter Machbarkeitstests entschieden. Produktanforderungen und Architektur stehen in [`../docs/README_KIDCONTROL.md`](../docs/README_KIDCONTROL.md).
+These points will be decided through small, isolated feasibility tests before implementation begins. Product requirements and architecture are documented in [`../docs/README_KIDCONTROL.md`](../docs/README_KIDCONTROL.md).

@@ -1,30 +1,30 @@
 # KidControl
 
-KidControl soll den Netzwerkzugriff kabelgebundener Apple TVs über die offizielle UniFi Network API und vorhandene ACL-Regeln zeitgesteuert freigeben. Benutzer starten und stoppen ihre Nutzung über eine für Smartphones optimierte WebUI; tägliche Zeitbudgets werden geräteübergreifend abgerechnet.
+KidControl is intended to provide time-controlled network access for wired Apple TVs through the official UniFi Network API and existing ACL rules. Users start and stop usage from a smartphone-optimized WebUI, while daily time budgets are tracked across devices.
 
 ## Status
 
-Planungsphase – Anforderungen und Architektur sind dokumentiert, die Laufzeit und konkrete Implementierung werden vor dem Coding festgelegt.
+Planning phase — requirements and architecture are documented. The runtime and implementation details will be selected before coding begins.
 
-## Geplante Voraussetzungen
+## Planned Prerequisites
 
-- Debian 12 oder 13
-- Zugriff auf eine UniFi Console mit Network Integration API und API-Key
-- pro Apple TV eine getestete UniFi-ACL-Regel
-- Node.js als bevorzugte Web-/Server-Laufzeit; genaue Version und SQLite-Anbindung noch offen
-- optional Python mit `pyatv` zur Erkennung des Apple-TV-Ruhezustands
+- Debian 12 or 13
+- access to a UniFi Console with the Network Integration API and an API key
+- one tested UniFi ACL rule per Apple TV
+- Node.js as the preferred web/server runtime; the exact version and SQLite integration are still open
+- optionally, Python with `pyatv` for detecting the Apple TV sleep state
 
-## Dokumentation
+## Documentation
 
-- [Anforderungen, Architektur und offene Entscheidungen](docs/README_KIDCONTROL.md)
-- [Platzhalter für die spätere Implementierung](code/README_CODE.md)
+- [Requirements, architecture, and open decisions](docs/README_KIDCONTROL.md)
+- [Placeholder for the future implementation](code/README_CODE.md)
 
-Die WebUI soll dieselbe Markdown-Datei aus `docs/` als HTML anzeigen. Ein relativer Symlink unter `code/public/docs/` verhindert eine fehleranfällige zweite Kopie.
+The WebUI will display the same Markdown file stored in `docs/` as HTML. A relative symlink under `code/public/docs/` avoids maintaining an error-prone second copy.
 
-## Sicherheit
+## Security
 
-UniFi-API-Keys gehören nicht ins Repository. Die Anwendung soll den Schlüssel später ausschließlich aus einer geschützten Laufzeitkonfiguration bzw. Umgebungsvariable lesen.
+UniFi API keys must not be stored in the repository. The application will read the key exclusively from protected runtime configuration or an environment variable.
 
-## Lizenz
+## License
 
 [MIT](LICENSE)

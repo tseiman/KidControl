@@ -1,159 +1,159 @@
-# KidControl – Anforderungen und Architektur
+# KidControl — Requirements and Architecture
 
-## 1. Ziel
+## 1. Objective
 
-KidControl verwaltet tägliche Zeitbudgets für die Nutzung mehrerer kabelgebundener Apple TVs. Angemeldete Benutzer wählen in einer Smartphone-WebUI ein Gerät und starten oder stoppen ihre Nutzung. Während einer aktiven Sitzung deaktiviert KidControl die dem Apple TV zugeordnete UniFi-ACL-Sperrregel. Ist kein Anspruch mehr aktiv, wird die Regel wieder aktiviert.
+KidControl manages daily usage budgets for multiple wired Apple TVs. Authenticated users select a device in a smartphone WebUI and start or stop their usage. During an active session, KidControl disables the UniFi ACL rule that blocks the selected Apple TV. The rule is enabled again when no active claim remains.
 
-Ein Budget darf in beliebig viele Abschnitte und auf verschiedene Apple TVs verteilt werden. Beispiel: Bei einer Stunde Tagesbudget sind 5, 30 und 25 Minuten auf einem oder mehreren Geräten möglich. Abgerechnet wird sekundengenau; die Restzeit erscheint als `hh:mm:ss`.
+A budget can be split into any number of intervals and used across different Apple TVs. For example, a one-hour daily budget can be consumed in sessions of 5, 30, and 25 minutes on one or more devices. Usage is charged with one-second precision, and the remaining time is displayed as `hh:mm:ss`.
 
-## 2. Festgelegter Umfang
+## 2. Defined Scope
 
-- zunächst ungefähr zwei, später bis zu zehn verwaltete Geräte;
-- nur internes LAN, geplanter FQDN `kidcontrol.tsei.mdn`;
-- Zielsystem: schlanke Debian-12- oder Debian-13-VM;
-- primär für Smartphones gestaltete WebUI;
-- Benutzername aus einer Auswahlliste und vierstellige PIN;
-- Anmeldung bleibt bis zum manuellen Logout bestehen;
-- Benutzer, PINs, Rollen, Wochenbudgets und Gerätezuordnung in einer Konfigurationsdatei;
-- Sitzungen, Verbrauch, Zeitkorrekturen und Laufzeitzustand in einer leichtgewichtigen, Node.js-kompatiblen SQLite-Datenbank;
-- Benutzerverwaltung ausschließlich über die Konfigurationsdatei, nicht über die WebUI;
-- Superuser-Funktionen über die WebUI;
-- Betriebsprotokoll über Standardausgabe/-fehler und damit ohne spezielle Node.js-Syslog-Bibliothek im systemd-Journal; zusätzliche Logdateien bleiben optional.
+- initially approximately two, eventually up to ten managed devices;
+- internal LAN access only, with the planned FQDN `kidcontrol.tsei.mdn`;
+- a lightweight Debian 12 or Debian 13 VM as the target system;
+- a WebUI designed primarily for smartphones;
+- username selection from a list and a four-digit PIN;
+- authentication remains valid until the user logs out manually;
+- users, PINs, roles, weekly budgets, and device mappings stored in a configuration file;
+- sessions, usage, time adjustments, and runtime state stored in a lightweight, Node.js-compatible SQLite database;
+- user administration exclusively through the configuration file, not through the WebUI;
+- superuser functions provided through the WebUI;
+- operational logging to standard output/error and therefore to the systemd journal without a dedicated Node.js syslog library; additional log files remain optional.
 
-Die Klartext-PINs sind eine bewusste Vereinfachung für das interne Netz. Der wesentlich mächtigere UniFi-API-Key darf trotzdem niemals in Quellcode, Benutzerkonfiguration oder Git stehen.
+Clear-text PINs are a deliberate simplification for the internal network. The significantly more powerful UniFi API key must nevertheless never be stored in source code, user configuration, or Git.
 
-## 3. UniFi-Schnittstelle
+## 3. UniFi Interface
 
-### Verifiziertes Prinzip
+### Verified Approach
 
-Das vorhandene und bereits praktisch getestete Skript verwendet die offizielle lokale UniFi Network Integration API:
+The existing, successfully tested script uses the official local UniFi Network Integration API:
 
-- Basisroute: `/proxy/network/integration/v1/sites/{siteId}`;
-- Authentifizierung: API-Key im HTTP-Header `X-API-Key`;
-- ACL-Liste: `GET /acl-rules`;
-- ACL-Änderung: `PUT /acl-rules/{aclRuleId}`;
-- aktivierte Sperrregel: Apple TV gesperrt;
-- deaktivierte Sperrregel: Apple TV freigegeben.
+- base route: `/proxy/network/integration/v1/sites/{siteId}`;
+- authentication: API key in the `X-API-Key` HTTP header;
+- list ACL rules: `GET /acl-rules`;
+- update an ACL rule: `PUT /acl-rules/{aclRuleId}`;
+- enabled blocking rule: Apple TV is blocked;
+- disabled blocking rule: Apple TV is allowed network access.
 
-KidControl soll die bestehende ACL-Struktur nicht erzeugen oder löschen, sondern nur ausdrücklich konfigurierte Regeln lesen und deren Feld `enabled` ändern. Anzeigenamen und ACL-Regeln werden explizit miteinander verknüpft. Damit erscheinen keine beliebigen Netzwerkregeln in der WebUI.
+KidControl must not create or delete the existing ACL structure. It only reads explicitly configured rules and changes their `enabled` field. Display names and ACL rules are mapped explicitly so that unrelated network rules never appear in the WebUI.
 
-Beispiel einer noch nicht finalen Gerätekonfiguration:
+Example of a preliminary device configuration:
 
 ```json
 {
   "devices": [
     {
       "id": "living-room",
-      "displayName": "Wohnzimmer",
-      "aclRuleName": "KC AppleTV Wohnzimmer",
-      "appleTvIdentifier": "noch-festzulegen"
+      "displayName": "Living Room",
+      "aclRuleName": "KC AppleTV Living Room",
+      "appleTvIdentifier": "to-be-defined"
     }
   ]
 }
 ```
 
-### API-Konfiguration
+### API Configuration
 
-Zur Laufzeit werden mindestens diese Werte benötigt:
+The runtime requires at least:
 
-- UniFi-Host;
-- Site-ID;
-- neuer UniFi-API-Key aus einer geschützten Secret-/Environment-Datei.
+- the UniFi host;
+- the site ID;
+- a new UniFi API key supplied through a protected secret or environment file.
 
-Der bereits übermittelte Schlüssel gilt als offengelegt und muss vor einer späteren Inbetriebnahme widerrufen und ersetzt werden. Konkreter Host, Site-ID und Schlüssel werden nicht in das Repository übernommen.
+The previously submitted key must be treated as exposed and revoked before deployment. The specific host, site ID, and API key will not be stored in the repository.
 
-### Quellen
+### Sources
 
 - [Ubiquiti: Getting Started with the Official UniFi API](https://help.ui.com/hc/en-us/articles/30076656117655-Getting-Started-with-the-Official-UniFi-API)
 - [UniFi Developer Portal: Network API](https://developer.ui.com/network/)
-- Die exakt zur installierten Network-Version passende Dokumentation und API-Key-Verwaltung befindet sich zusätzlich lokal unter **UniFi Network → Control Plane → Integrations**.
+- Documentation matching the installed Network version and API key management are also available locally under **UniFi Network → Control Plane → Integrations**.
 
-## 4. Zeit- und Policy-Modell
+## 4. Time and Policy Model
 
-### Tagesbudget
+### Daily Budget
 
-- Jeder normale Benutzer besitzt je einen Vorgabewert für Montag bis Sonntag.
-- Eingabe der Vorgaben als Stunden und Minuten.
-- Abrechnung intern sekundengenau.
-- Tagesgrenze ist Mitternacht in der Zeitzone `Europe/Berlin` einschließlich CET/CEST-Wechsel.
-- Nicht verbrauchte Zeit verfällt an der Tagesgrenze.
-- Ferien und andere Ausnahmen werden manuell über Konfiguration oder Tageskorrektur behandelt.
+- Every regular user has one default budget for each day from Monday through Sunday.
+- Defaults are entered as hours and minutes.
+- Internal accounting uses one-second precision.
+- The day changes at midnight in the `Europe/Berlin` time zone, including CET/CEST transitions.
+- Unused time expires at the end of the day.
+- Holidays and other exceptions are handled manually through configuration or a daily adjustment.
 
-Effektive Restzeit:
+Effective remaining time:
 
 ```text
-Rest = Tagesvorgabe + heutige Superuser-Korrektur - heutiger Verbrauch
+Remaining = daily default + today's superuser adjustment - today's usage
 ```
 
-Der Wert wird für normale Benutzer nicht negativ. Erreicht er null, beendet KidControl die laufende Sitzung sofort.
+The value never becomes negative for regular users. When it reaches zero, KidControl immediately ends any active session.
 
-### Superuser
+### Superusers
 
-Ein Superuser:
+A superuser:
 
-- besitzt unbegrenzte Nutzungszeit;
-- kann die heutige Restzeit eines normalen Benutzers direkt auf `00:00` bis `24:59` einstellen;
-- kann Zeit damit hinzufügen, reduzieren, vollständig streichen oder zurückgeben;
-- bedient Stunden und Minuten bevorzugt über animierte Scroll-Auswahlelemente;
-- kann einen manuellen „KidControl-Zustand wiederherstellen“-Reset auslösen;
-- verdrängt normale Sitzungen am gewählten Apple TV.
+- has unlimited usage time;
+- can set a regular user's remaining time for the current day directly from `00:00` through `24:59`;
+- can therefore add, reduce, remove completely, or restore time;
+- preferably selects hours and minutes with animated scrolling controls;
+- can trigger a manual **Restore KidControl State** reset;
+- displaces regular sessions on the selected Apple TV.
 
-Verdrängte normale Sitzungen werden pausiert und nicht automatisch fortgesetzt. Nach Ende der Superuser-Nutzung muss ein normaler Benutzer erneut **Start** drücken.
+Displaced regular sessions are paused and are not resumed automatically. Once superuser usage ends, a regular user must press **Start** again.
 
-## 5. Mehrbenutzer- und Gerätezustand
+## 5. Multi-User and Device State
 
-### Ansprüche statt bloßer ACL-Zustände
+### Claims Instead of ACL State Alone
 
-Die ACL kennt nur gesperrt oder freigegeben. KidControl verwaltet deshalb zusätzlich pro Benutzer einen eigenen Nutzungsanspruch:
+An ACL only represents blocked or allowed network access. KidControl therefore maintains an individual usage claim for each user:
 
-- Ein Benutzer darf höchstens einen aktiven Anspruch besitzen.
-- Wählt er ein zweites Gerät, endet sein Anspruch am ersten Gerät sofort.
-- Das erste Gerät wird nur dann gesperrt, wenn dort kein weiterer Anspruch aktiv ist.
-- Mehrere normale Benutzer dürfen gleichzeitig Ansprüche auf dasselbe Apple TV besitzen.
-- Jeder dieser Benutzer verbraucht während seines eigenen aktiven Anspruchs sein eigenes Budget.
-- Ein Benutzer kann nur seinen eigenen Anspruch stoppen.
-- Die ACL bleibt deaktiviert, solange mindestens ein zulässiger Anspruch besteht.
-- Die WebUI weist nicht besonders darauf hin, wenn das Gerät bereits durch einen anderen Benutzer freigeschaltet ist.
+- A user can have at most one active claim.
+- Selecting a second device immediately ends that user's claim on the first device.
+- The first device is blocked only if no other active claim remains there.
+- Multiple regular users may hold claims on the same Apple TV at the same time.
+- Each of these users consumes their own budget while their claim is active.
+- A user can stop only their own claim.
+- The ACL remains disabled while at least one valid claim exists.
+- The WebUI does not explicitly indicate that another user has already enabled the device.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Gesperrt
-    Gesperrt --> Freigegeben: erster Anspruch startet
-    Freigegeben --> Freigegeben: weiterer Anspruch startet oder endet
-    Freigegeben --> Gesperrt: letzter Anspruch endet
-    Freigegeben --> Gesperrt: Budget null oder Standby
+    [*] --> Blocked
+    Blocked --> Allowed: first claim starts
+    Allowed --> Allowed: another claim starts or ends
+    Allowed --> Blocked: last claim ends
+    Allowed --> Blocked: budget exhausted or standby
 ```
 
-### Wechsel des Apple TV
+### Switching Apple TVs
 
-Beim Wechsel eines Benutzers:
+When a user switches devices:
 
-1. bisherige Sitzung sekundengenau abrechnen und beenden;
-2. alte ACL aktivieren, falls dort kein anderer Anspruch besteht;
-3. Budget prüfen;
-4. neuen Anspruch speichern;
-5. neue ACL deaktivieren;
-6. Ergebnis über die UniFi API zurücklesen.
+1. charge and close the previous session with one-second precision;
+2. enable the old ACL if no other claim remains there;
+3. verify the remaining budget;
+4. persist the new claim;
+5. disable the new ACL;
+6. read the result back through the UniFi API.
 
-Die Datenbankänderung und der externe ACL-Aufruf können nicht in einer gemeinsamen Transaktion liegen. Deshalb braucht die Implementierung einen nachvollziehbaren Soll-/Ist-Abgleich und idempotente Wiederholungen.
+The database update and external ACL request cannot share a transaction. The implementation therefore needs a traceable desired/actual-state reconciliation process and idempotent retries.
 
-## 6. Standby-Erkennung
+## 6. Standby Detection
 
-Ein Apple TV kann im Ruhezustand weiterhin im Netzwerk als online erscheinen. Ein reiner Ping oder UniFi-Online-Status ist daher nicht ausreichend. Als bevorzugter Prüfweg wird [`pyatv`](https://pyatv.dev/) untersucht.
+An Apple TV can remain online from a network perspective while sleeping. Ping and the UniFi online state are therefore insufficient. [`pyatv`](https://pyatv.dev/) is the preferred option to investigate.
 
-Vorgesehenes Verhalten:
+Required behavior:
 
-- Standby beendet die betroffenen normalen Sitzungen;
-- die bis dahin verbrauchte Zeit wird sekundengenau gespeichert;
-- die ACL wird aktiviert, sobald kein anderer Anspruch mehr besteht;
-- Aufwachen startet keine Sitzung automatisch;
-- der Benutzer muss erneut **Start** drücken.
+- Standby ends the affected regular sessions.
+- Usage up to that point is stored with one-second precision.
+- The ACL is enabled as soon as no other claim remains.
+- Waking the Apple TV does not restart a session automatically.
+- The user must press **Start** again.
 
-Wichtige Einschränkung: Laut `pyatv` wird der Power-State teilweise aus verbundenen Ausgabegeräten abgeleitet und kann beispielsweise mit HomePods oder externen Audiogeräten unzuverlässig sein. Vor der endgültigen Architektur ist daher ein Test mit den tatsächlich eingesetzten Apple TVs erforderlich. Der Test muss Erkennung, einmaliges Pairing, gespeicherte Credentials, Reaktionszeit und Verhalten mit den vorhandenen Audioausgaben prüfen.
+Important limitation: according to `pyatv`, the power state is partly derived from connected output devices and can be unreliable when, for example, HomePods or external audio devices are used. The final architecture therefore requires testing with the actual Apple TVs. The test must cover detection, initial pairing, stored credentials, response time, and behavior with the existing audio outputs.
 
-## 7. Anmeldung und Benutzerkonfiguration
+## 7. Authentication and User Configuration
 
-Vorgesehene, noch nicht finale Struktur:
+Preliminary structure:
 
 ```json
 {
@@ -161,7 +161,7 @@ Vorgesehene, noch nicht finale Struktur:
   "users": [
     {
       "id": "user-1",
-      "displayName": "Benutzer 1",
+      "displayName": "User 1",
       "pin": "1234",
       "role": "user",
       "weeklyBudgetMinutes": {
@@ -178,99 +178,99 @@ Vorgesehene, noch nicht finale Struktur:
 }
 ```
 
-Die Beispiel-PIN ist kein produktiver Zugangswert. Vor der Implementierung werden Schema, Dateipfad und Validierungsregeln verbindlich festgelegt.
+The example PIN is not a production credential. The schema, file path, and validation rules will be finalized before implementation.
 
-Die Sitzung verwendet ein zufälliges, serverseitig widerrufbares Cookie mit mindestens `HttpOnly` und `SameSite=Strict`. „Bis zum Logout“ bedeutet eine langlebige Anmeldung, aber keine Speicherung der PIN im Browser. Eine PIN-Änderung oder Benutzerentfernung muss bestehende Sitzungen widerrufen können.
+Authentication uses a random, server-side revocable cookie with at least `HttpOnly` and `SameSite=Strict`. “Until logout” means a long-lived authenticated session, not storage of the PIN in the browser. Changing a PIN or removing a user must be able to revoke existing sessions.
 
-## 8. Persistenz und Neustart
+## 8. Persistence and Restart
 
-SQLite speichert mindestens:
+SQLite stores at least:
 
-- abgeschlossene und aktive Nutzungssitzungen;
-- Start-, Stopp- und Abrechnungszeitpunkte;
-- Tagesverbrauch je Benutzer;
-- Superuser-Korrekturen mit Zeitpunkt und Urheber;
-- aktiven Anspruch je Benutzer und Apple TV;
-- zuletzt bekannten und gewünschten ACL-Zustand;
-- externe Zustandsübernahmen und manuelle Resets.
+- completed and active usage sessions;
+- start, stop, and accounting timestamps;
+- daily usage per user;
+- superuser adjustments with timestamp and author;
+- the active claim for each user and Apple TV;
+- the last known and desired ACL state;
+- adopted external states and manual resets.
 
-Beim Neustart gilt die zustandsorientierte Wiederherstellung:
+State-oriented recovery applies after a restart:
 
-1. gespeicherte aktive Sitzungen laden und bis zum Neustartzeitpunkt abrechnen;
-2. Tagesgrenze und Restbudgets prüfen;
-3. aktuellen Zustand aller verwalteten ACLs lesen;
-4. gespeicherte gültige Ansprüche fortsetzen;
-5. ACLs entsprechend dem wiederhergestellten Zustand setzen;
-6. das Ergebnis erneut lesen und protokollieren.
+1. load stored active sessions and charge usage up to the restart time;
+2. check the day boundary and remaining budgets;
+3. read the current state of all managed ACLs;
+4. continue valid stored claims;
+5. set ACLs according to the recovered state;
+6. read back and log the result.
 
-Für einen längeren Dienstausfall muss vor der Implementierung im Machbarkeitstest festgelegt werden, ob die Zeit bis zum Neustart vollständig als Nutzung zählt. Die sicherere Budgetregel ist: Eine zuvor aktive Sitzung zählt weiter, bis KidControl den Standby oder einen Stopp sicher feststellen kann.
+For a longer service outage, a feasibility test must determine whether the complete interval until restart counts as usage. The safer budget rule is that a previously active session continues to count until KidControl can reliably establish standby or a stop event.
 
-## 9. Externe ACL-Änderungen
+## 9. External ACL Changes
 
-Im normalen Betrieb übernimmt KidControl eine außerhalb der Anwendung vorgenommene ACL-Änderung als Istzustand und protokolliert sie. Es überschreibt sie nicht sofort. Daraus folgt:
+During normal operation, KidControl adopts an ACL change made outside the application as the actual state and logs it. It does not immediately overwrite the change. Consequently:
 
-- extern gesperrt: betroffene lokale Ansprüche stoppen und abrechnen;
-- extern freigegeben ohne Anspruch: als externe Freigabe markieren, aber keinem Benutzer Zeit berechnen;
-- danach ist die Datenbank der neue dokumentierte Zustand.
+- externally blocked: stop and account for affected local claims;
+- externally allowed without a claim: record an external allowance without charging any user's time;
+- the database then contains the newly documented state.
 
-Ein Superuser kann über **KidControl-Zustand wiederherstellen** bewusst die Gegenrichtung auslösen: gültige lokale Ansprüche und Policies werden ausgewertet und die verwalteten ACLs auf diesen Sollzustand gesetzt.
+A superuser can deliberately apply the opposite direction with **Restore KidControl State**: KidControl evaluates valid local claims and policies and sets managed ACLs to the resulting desired state.
 
-## 10. Vorgeschlagene Architektur
+## 10. Proposed Architecture
 
 ```mermaid
 flowchart LR
-    UI[Smartphone-WebUI] --> APP[KidControl-Dienst]
-    APP --> CFG[Benutzer- und Gerätekonfiguration]
+    UI[Smartphone WebUI] --> APP[KidControl service]
+    APP --> CFG[User and device configuration]
     APP --> DB[(SQLite)]
     APP --> UNIFI[UniFi Network API]
-    APP --> ATV[Apple-TV-Statusadapter]
+    APP --> ATV[Apple TV state adapter]
     APP --> LOG[stdout / stderr]
-    LOG --> JOURNAL[systemd-Journal]
+    LOG --> JOURNAL[systemd journal]
     DOC[docs/README_KIDCONTROL.md] --> UI
 ```
 
-Empfohlene Aufteilung:
+Recommended division:
 
-- JavaScript/Node.js für HTTP-API, WebUI, Authentifizierung, Zeitlogik und UniFi-Zugriff;
-- SQLite als einzelne lokale Datenbankdatei;
-- kleiner lokaler `pyatv`-Adapter nur dann, wenn der Gerätetest zuverlässige Standby-Signale liefert;
-- systemd für Start, Neustart und Journal-Logging;
-- möglichst wenige Frameworks und keine separate Datenbank oder Queue.
+- JavaScript/Node.js for the HTTP API, WebUI, authentication, time logic, and UniFi access;
+- SQLite as a single local database file;
+- a small local `pyatv` adapter only if device testing provides reliable standby signals;
+- systemd for startup, restarts, and journal logging;
+- as few frameworks as practical, with no separate database server or queue.
 
-Node.js kann ohne spezielle Syslog-Abhängigkeit in stdout/stderr schreiben. Ein systemd-Service übernimmt diese Ausgaben automatisch ins Journal; Betrieb und Rotation bleiben damit Aufgabe der vorhandenen Debian-Werkzeuge.
+Node.js can write to stdout/stderr without a dedicated syslog dependency. A systemd service automatically captures this output in the journal, leaving operation and rotation to the existing Debian tools.
 
-## 11. Noch bewusst offene Technikentscheidungen
+## 11. Deliberately Open Technical Decisions
 
-Vor produktivem Code sind kleine Machbarkeitstests vorgesehen:
+Small feasibility tests are required before production code is written:
 
-1. **Standby:** `pyatv` mit den realen Geräten koppeln und Schlaf-/Wachzustand prüfen.
-2. **SQLite:** modernes eingebautes `node:sqlite` gegen eine etablierte Node.js-SQLite-Bibliothek abwägen. Ziel ist Debian-12-Kompatibilität bei minimalem Installationsaufwand.
-3. **Webstack:** frameworkarme Server-/Frontend-Lösung gegen einen kleinen etablierten Stack abwägen.
-4. **UniFi-Test:** mit einem neu erzeugten temporären API-Key Lesen, Umschalten und Zurücklesen einer ausdrücklich benannten Test-ACL prüfen.
-5. **Ausfallfenster:** Verhalten bei Dienststillstand, Mitternacht und Zeitumstellung praktisch testen.
+1. **Standby:** pair `pyatv` with the actual devices and verify sleep/wake detection.
+2. **SQLite:** compare modern built-in `node:sqlite` with an established Node.js SQLite library. The goal is Debian 12 compatibility with minimal installation overhead.
+3. **Web stack:** compare a framework-light server/frontend implementation with a small established stack.
+4. **UniFi test:** use a newly generated temporary API key to read, toggle, and read back an explicitly named test ACL.
+5. **Outage window:** test behavior during service downtime, at midnight, and across daylight-saving transitions.
 
-Es wird JavaScript und kein TypeScript verwendet. Erst nach diesen Tests werden `package.json`, Abhängigkeiten und Installationsanleitung verbindlich festgelegt.
+The implementation will use JavaScript, not TypeScript. The `package.json`, dependencies, and installation instructions will only be finalized after these tests.
 
-## 12. Dokumentation in der WebUI
+## 12. Documentation in the WebUI
 
-Die WebUI soll diese Datei als HTML rendern. Im Repository zeigt
+The WebUI will render this file as HTML. In the repository,
 
 `code/public/docs/README_KIDCONTROL.md`
 
-als relativer Symlink direkt auf diese Quelldatei. Dadurch gibt es keine zweite, manuell zu pflegende Kopie. Der spätere Webserver bzw. Build-Prozess muss Symlinks ausdrücklich unterstützen; andernfalls liest der Server die Datei direkt aus `docs/`.
+is a relative symlink to this source file. This avoids a second manually maintained copy. The future web server or build process must explicitly support symlinks; otherwise, the server will read the file directly from `docs/`.
 
-## 13. Akzeptanzkriterien für eine spätere erste Version
+## 13. Acceptance Criteria for a Future Initial Release
 
-- Login per Benutzerwahl und vierstelliger PIN;
-- langlebige Sitzung bis zum Logout;
-- Start, Stopp und Wechsel eines Apple TV;
-- sekundengenaue, geräteübergreifende Budgetabrechnung;
-- sieben Tagesbudgets pro Benutzer;
-- automatische Beendigung bei zuverlässig erkanntem Standby;
-- korrekte Mehrbenutzer-Ansprüche auf demselben Gerät;
-- sofortiges Stoppen bei Restzeit null;
-- Superuser-Nutzung, Zeitkorrektur, Verdrängung und Reset;
-- Wiederherstellung nach Neustart;
-- Übernahme und Protokollierung externer ACL-Änderungen;
-- keine Secrets im Repository;
-- Darstellung dieser Dokumentation in der WebUI.
+- Login through username selection and a four-digit PIN.
+- Long-lived authentication until logout.
+- Start, stop, and switch an Apple TV.
+- Per-second, cross-device budget accounting.
+- Seven daily defaults per user.
+- Automatic termination when standby is reliably detected.
+- Correct multi-user claims on the same device.
+- Immediate termination when remaining time reaches zero.
+- Superuser usage, time adjustments, displacement, and reset.
+- Recovery after restart.
+- Adoption and logging of external ACL changes.
+- No secrets in the repository.
+- Display of this documentation in the WebUI.
