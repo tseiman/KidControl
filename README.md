@@ -19,7 +19,7 @@ Planning phase — requirements and architecture are documented. The runtime and
 - [Requirements, architecture, and open decisions](docs/README_KIDCONTROL.md)
 - [Placeholder for the future implementation](code/README_CODE.md)
 
-The WebUI will display the same Markdown file stored in `docs/` as HTML. A relative symlink under `code/public/docs/` avoids maintaining an error-prone second copy.
+The WebUI will display the Markdown file stored in `docs/` as HTML. The deployment process must copy the file into the documentation server's content directory.
 
 ## Security
 

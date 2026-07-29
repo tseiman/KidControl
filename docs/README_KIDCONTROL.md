@@ -253,11 +253,7 @@ The implementation will use JavaScript, not TypeScript. The `package.json`, depe
 
 ## 12. Documentation in the WebUI
 
-The WebUI will render this file as HTML. In the repository,
-
-`code/public/docs/README_KIDCONTROL.md`
-
-is a relative symlink to this source file. This avoids a second manually maintained copy. The future web server or build process must explicitly support symlinks; otherwise, the server will read the file directly from `docs/`.
+The WebUI will render this file as HTML. The deployment process copies this source file into the documentation server's content directory; no documentation symlink is maintained inside the project.
 
 ## 13. Acceptance Criteria for a Future Initial Release
 
