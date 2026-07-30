@@ -139,7 +139,7 @@ The database update and external ACL request cannot share a transaction. The imp
 
 ## 6. Standby Detection
 
-An Apple TV can remain online from a network perspective while sleeping. Ping and the UniFi online state are therefore insufficient. [`pyatv`](https://pyatv.dev/) is the preferred option to investigate.
+An Apple TV can remain online from a network perspective while sleeping. Ping and the UniFi online state are therefore insufficient. KidControl will use the separately maintained TypeScript fork of [`node-appletv-remote`](https://github.com/tseiman/node-appletv-remote) to observe Companion Link `SystemStatus` and `TVSystemStatus` events without a Python runtime.
 
 Required behavior:
 
@@ -148,8 +148,9 @@ Required behavior:
 - The ACL is enabled as soon as no other claim remains.
 - Waking the Apple TV does not restart a session automatically.
 - The user must press **Start** again.
+- A missing, unsupported, or disconnected signal is `unknown` and must never be interpreted as standby.
 
-Important limitation: according to `pyatv`, the power state is partly derived from connected output devices and can be unreliable when, for example, HomePods or external audio devices are used. The final architecture therefore requires testing with the actual Apple TVs. The test must cover detection, initial pairing, stored credentials, response time, and behavior with the existing audio outputs.
+The adapter maps a confirmed Companion `Asleep` state to `off`; `Awake`, `Idle`, and `Screensaver` map to `on`. Some tvOS releases do not implement the initial `FetchAttentionState` request, so pushed status events remain authoritative. The final architecture still requires testing with the actual Apple TVs. The test must cover discovery, initial pairing, protected credential storage, initial-state availability, event response time, disconnect/reconnect behavior, and the existing audio outputs.
 
 ## 7. Authentication and User Configuration
 
@@ -231,9 +232,9 @@ flowchart LR
 
 Recommended division:
 
-- JavaScript/Node.js for the HTTP API, WebUI, authentication, time logic, and UniFi access;
+- TypeScript/Node.js for the HTTP API, WebUI, authentication, time logic, and UniFi access;
 - SQLite as a single local database file;
-- a small local `pyatv` adapter only if device testing provides reliable standby signals;
+- the separately maintained `node-appletv-remote` fork as a regular TypeScript dependency for Apple TV Companion power-state signals;
 - systemd for startup, restarts, and journal logging;
 - as few frameworks as practical, with no separate database server or queue.
 
@@ -243,13 +244,13 @@ Node.js can write to stdout/stderr without a dedicated syslog dependency. A syst
 
 Small feasibility tests are required before production code is written:
 
-1. **Standby:** pair `pyatv` with the actual devices and verify sleep/wake detection.
+1. **Standby:** pair the `node-appletv-remote` Companion adapter with the actual devices and verify initial state, sleep/wake events, disconnects, and reconnection.
 2. **SQLite:** compare modern built-in `node:sqlite` with an established Node.js SQLite library. The goal is Debian 12 compatibility with minimal installation overhead.
 3. **Web stack:** compare a framework-light server/frontend implementation with a small established stack.
 4. **UniFi test:** use a newly generated temporary API key to read, toggle, and read back an explicitly named test ACL.
 5. **Outage window:** test behavior during service downtime, at midnight, and across daylight-saving transitions.
 
-The implementation will use JavaScript, not TypeScript. The `package.json`, dependencies, and installation instructions will only be finalized after these tests.
+The implementation will use TypeScript on Node.js. The exact Node.js version, `package.json`, dependency versions, and installation instructions will only be finalized after these tests.
 
 ## 12. Documentation in the WebUI
 

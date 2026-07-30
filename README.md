@@ -4,15 +4,15 @@ KidControl is intended to provide time-controlled network access for wired Apple
 
 ## Status
 
-Planning phase — requirements and architecture are documented. The runtime and implementation details will be selected before coding begins.
+Planning phase — requirements and architecture are documented. TypeScript on Node.js and a separate `node-appletv-remote` fork have been selected; the remaining runtime and WebUI details will be finalized before coding begins.
 
 ## Planned Prerequisites
 
 - Debian 12 or 13
 - access to a UniFi Console with the Network Integration API and an API key
 - one tested UniFi ACL rule per Apple TV
-- Node.js as the preferred web/server runtime; the exact version and SQLite integration are still open
-- optionally, Python with `pyatv` for detecting the Apple TV sleep state
+- TypeScript on Node.js as the web/server runtime; the exact Node.js version and SQLite integration are still open
+- the maintained [`node-appletv-remote`](https://github.com/tseiman/node-appletv-remote) fork for Companion Link power-state monitoring
 
 ## Documentation
 
