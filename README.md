@@ -171,6 +171,8 @@ Follow service logs with:
 sudo journalctl -u kidcontrol.service -f
 ```
 
+The first application line after every process start is the Git revision embedded during the build, for example `KidControl version 27b6a88`. A `-dirty` suffix means the build contained local changes that were not committed; `unknown` means `dist/version.txt` was not installed. Neither state is expected for a normal production update.
+
 The service binds to `127.0.0.1:8080` by default. Expose it only through the configured HTTPS reverse proxy.
 
 ## Updating KidControl
@@ -205,6 +207,8 @@ sudo systemctl start kidcontrol.service
 sudo systemctl status --no-pager kidcontrol.service
 sudo journalctl -u kidcontrol.service -n 50 --no-pager
 ```
+
+Confirm that the journal contains `KidControl version` followed by the short revision just pulled. This proves that systemd started the newly built and installed application rather than an older `/opt/kidcontrol` copy.
 
 Do not replace `/etc/kidcontrol/config.json`, `/etc/kidcontrol/kidcontrol.env`, or `/etc/kidcontrol/.atv-credentials.json` during a normal update. Review new example files in Git manually if a release documents a configuration change.
 

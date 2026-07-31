@@ -10,6 +10,7 @@ import { Auth } from './auth.js';
 import { AppleTvMonitor } from './apple-tv.js';
 import { createKidControlServer } from './server.js';
 import { startResources } from './startup.js';
+import { versionBanner } from './version.js';
 
 function protectedFile(path: string, label: string): string {
   const status = statSync(path);
@@ -24,6 +25,7 @@ function safeStateDirectory(path: string): void {
 
 async function main(): Promise<void> {
   process.umask(0o077);
+  console.log(versionBanner());
   const settings = runtimeSettings(process.env);
   const config = validateConfig(JSON.parse(protectedFile(settings.configPath, 'KIDCONTROL_CONFIG')));
   const credentialText = protectedFile(settings.appleCredentialsPath, 'APPLETV_CREDENTIALS');
