@@ -73,6 +73,7 @@ web_modules/
 # KidControl runtime configuration and state
 config/config.json
 data/
+credentials/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
