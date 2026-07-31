@@ -124,6 +124,7 @@ The service binds to `127.0.0.1:8080` by default. Expose it only through the con
 
 - [Detailed implementation and operations](code/README_CODE.md)
 - [Requirements and architecture](docs/README_KIDCONTROL.md)
+- [Configuration quick guide](config/README_CONFIGURATION.md)
 - [Example configuration](config/config.example.json)
 - [systemd service](etc/kidcontrol.service)
 
