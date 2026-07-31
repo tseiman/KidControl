@@ -1,93 +1,131 @@
 # KidControl
 
-KidControl provides time-budgeted network access for wired Apple TVs. Users authenticate in a smartphone-oriented WebUI, claim a managed Apple TV, and consume a daily per-user budget. KidControl controls existing blocking ACL rules through the official local UniFi Network Integration API and observes confirmed Apple TV standby through Companion Link.
+## System requirements summary
+
+- **Recommended VM:** 1 vCPU, 512 MiB RAM, 1 GiB free disk
+- **Measured service footprint:** about 80 MiB idle RSS, effectively 0% idle CPU, 224 KiB built application, about 180 KiB initial SQLite state
+- **Software:** Debian 12/13, Node.js `>=22.12.0`, npm, Git, systemd, and an HTTPS reverse proxy
+- **External requirements:** UniFi Network Integration API, one uniquely named blocking ACL per Apple TV, and paired Companion credentials
+
+The recommendation includes reserve for Debian, the TLS proxy, production dependencies, SQLite growth, and the systemd journal. The measurement used the built production modules with local fake UniFi and Apple TV adapters; no real LAN device was contacted.
+
+KidControl provides time-budgeted network access for wired Apple TVs. Users authenticate in a smartphone-oriented WebUI, claim a managed Apple TV, and consume a daily budget. KidControl controls existing blocking ACL rules through the official local UniFi Network Integration API and observes confirmed Apple TV standby through Companion Link.
 
 ## Status
 
-The TypeScript initial-release implementation is available under [`code/`](code/). It includes:
+The TypeScript initial release includes:
 
-- per-second daily accounting in `Europe/Berlin`;
-- restart and downtime recovery;
-- shared-device claims and one active claim per user;
-- unlimited superusers, displacement, adjustments, and restore;
+- per-second accounting in `Europe/Berlin`, including midnight, DST, and restart recovery;
+- shared-device claims, daily budgets, and unlimited superusers;
 - durable desired/actual UniFi ACL reconciliation;
-- Companion `on` / `off` / `unknown` monitoring;
+- Companion `on` / `off` / `unknown` monitoring and reconnects;
 - SQLite persistence;
 - secure cookie authentication, CSRF protection, and login throttling;
-- a responsive dependency-free WebUI;
-- a hardened systemd service example.
+- a dependency-free mobile WebUI;
+- a hardened systemd unit.
 
-Automated tests use fake UniFi and Apple TV adapters and never contact live services. The underlying `node-appletv-remote` Companion implementation has been hardware-validated separately. A deployment still requires final end-to-end tests with every configured ACL and Apple TV.
+Automated tests use fake external adapters and never contact live UniFi or Apple TV systems. Production deployment still requires an end-to-end test with every configured ACL and Apple TV.
 
-## Requirements
+## Default installation
 
-- Debian 12 or 13
-- Node.js `>=22.12.0` (Node.js 22 is selected by [`.nvmrc`](.nvmrc))
-- npm
-- a TLS reverse proxy for the public KidControl origin
-- a UniFi Console with the Network Integration API
-- one existing, uniquely named blocking ACL rule per Apple TV
-- Companion-paired Apple TV credentials stored outside Git
+This is the supported default path: build from the repository, install under `/opt/kidcontrol`, store configuration under `/etc/kidcontrol`, and run the service as the dedicated `kidcontrol` user.
 
-KidControl uses the built-in `node:sqlite` module. Node.js 22 currently prints an experimental-module warning for this API; the application pins its minimum Node version and tests the SQLite behavior it relies on.
+### 1. Build and test
 
-## Build and test
+Run from the repository root:
 
 ```bash
 cd code
 npm ci
 npm test
 npm run build
+cd ..
 ```
 
-The build writes JavaScript, the WebUI, and a copy of the canonical requirements document to `code/dist/`.
-
-## Configuration
-
-1. Copy [`config/config.example.json`](config/config.example.json) to a protected runtime location such as `/etc/kidcontrol/config.json`.
-2. Replace every example user, PIN, budget, ACL rule name, and Apple TV identifier.
-3. Store the file with mode `0600`, owned by the service account.
-4. Install [`code/.env.example`](code/.env.example) as `/etc/kidcontrol/kidcontrol.env`, owned by `root:root` with mode `0600`, and fill in the deployment values. Do not use a plain copy that may retain mode `0644`.
-5. Generate an independent 32-byte authentication pepper, for example with `openssl rand -hex 32`, and store it only in the protected environment file.
-6. Store the Companion credential map with mode `0600`, owned by the service account.
-
-Required environment values are documented in [`code/README_CODE.md`](code/README_CODE.md). The UniFi API key, authentication pepper, PIN configuration, and Apple TV credentials must never be committed.
-
-## Deployment
-
-[`deploy/kidcontrol.service`](deploy/kidcontrol.service) is a hardened systemd example for a dedicated `kidcontrol` account. It expects:
-
-- application: `/opt/kidcontrol`;
-- configuration and environment: `/etc/kidcontrol`;
-- state database: `/var/lib/kidcontrol/state.sqlite`;
-- loopback listener: `127.0.0.1:8080` by default;
-- HTTPS termination at a reverse proxy preserving the configured public `Host` and `Origin`, connecting from `TRUSTED_PROXY_IP`, and overwriting `X-Forwarded-For` with the single client IP.
-
-Install and enable the unit only after adapting and reviewing all paths:
+### 2. Create the service account and directories
 
 ```bash
-sudo install -m 0644 deploy/kidcontrol.service /etc/systemd/system/kidcontrol.service
-sudo systemctl daemon-reload
-sudo systemctl enable --now kidcontrol.service
-sudo systemctl status kidcontrol.service
+sudo useradd --system --home-dir /var/lib/kidcontrol --shell /usr/sbin/nologin kidcontrol
+sudo install -d -o root -g root -m 0755 /opt/kidcontrol/code
+sudo install -d -o kidcontrol -g kidcontrol -m 0700 /etc/kidcontrol
+sudo install -d -o kidcontrol -g kidcontrol -m 0700 /var/lib/kidcontrol
 ```
 
-KidControl rejects non-HTTPS public and UniFi origins. A private UniFi CA can be supplied through `UNIFI_CA_FILE`; certificate verification remains enabled.
+### 3. Install the application
+
+```bash
+sudo cp -a code/dist code/package.json code/package-lock.json /opt/kidcontrol/code/
+sudo chown -R root:root /opt/kidcontrol
+sudo npm --prefix /opt/kidcontrol/code ci --omit=dev
+```
+
+### 4. Install and edit the protected configuration
+
+```bash
+sudo install -o kidcontrol -g kidcontrol -m 0600 config/config.example.json /etc/kidcontrol/config.json
+sudo install -o root -g root -m 0600 code/.env.example /etc/kidcontrol/kidcontrol.env
+sudo mcedit /etc/kidcontrol/config.json
+sudo mcedit /etc/kidcontrol/kidcontrol.env
+sudo mcedit /etc/kidcontrol/apple-tv.json
+sudo chown kidcontrol:kidcontrol /etc/kidcontrol/apple-tv.json
+sudo chmod 0600 /etc/kidcontrol/apple-tv.json
+```
+
+Replace every dummy user, PIN, budget, ACL name, Apple TV identifier, path, origin, site ID, and API key. Put the existing paired Companion credential map in `apple-tv.json`.
+
+Generate the required independent authentication pepper once and copy it into `KIDCONTROL_AUTH_PEPPER` in the protected environment file:
+
+```bash
+openssl rand -hex 32
+```
+
+Do not commit or share the resulting pepper, UniFi API key, PINs, cookie tokens, or Companion credentials.
+
+The HTTPS reverse proxy must preserve the public host and overwrite the client address with exactly one value:
+
+```nginx
+proxy_set_header Host $http_host;
+proxy_set_header X-Forwarded-For $remote_addr;
+```
+
+Set `TRUSTED_PROXY_IP` to the proxy address as seen by KidControl. `PUBLIC_ORIGIN` and `UNIFI_HOST` must both use HTTPS.
+
+### 5. Install and start the systemd service
+
+The checked-in unit is [`etc/kidcontrol.service`](etc/kidcontrol.service).
+
+```bash
+sudo install -o root -g root -m 0644 etc/kidcontrol.service /etc/systemd/system/kidcontrol.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now kidcontrol.service
+sudo systemctl status --no-pager kidcontrol.service
+```
+
+Follow service logs with:
+
+```bash
+sudo journalctl -u kidcontrol.service -f
+```
+
+The service binds to `127.0.0.1:8080` by default. Expose it only through the configured HTTPS reverse proxy.
 
 ## Safety semantics
 
-- Only confirmed Companion `Asleep → off` ends regular claims normally.
+- Only confirmed Companion `Asleep → off` ends normal regular-user claims.
 - `on`, `unknown`, disconnects, and network errors never fabricate standby.
 - Wake does not start or resume a claim.
-- Active claims are conservatively charged through service downtime until restart or the exact budget-exhaustion second.
+- Active claims are conservatively charged through downtime until restart or exact budget exhaustion.
 - External UniFi changes are adopted during normal reconciliation.
-- An external no-claim allowance remains the baseline until a superuser explicitly runs **Restore KidControl State**.
+- An external no-claim allowance remains the baseline until an explicit superuser restore.
 - A failed first unblock does not start billable usage.
+- Removing a device that may still be allowed or pending deliberately blocks startup until it is safely restored with the previous configuration.
 
 ## Documentation
 
+- [Detailed implementation and operations](code/README_CODE.md)
 - [Requirements and architecture](docs/README_KIDCONTROL.md)
-- [Implementation, configuration, and operations](code/README_CODE.md)
+- [Example configuration](config/config.example.json)
+- [systemd service](etc/kidcontrol.service)
 
 ## License
 
