@@ -1,0 +1,34 @@
+{
+  "timezone": "Europe/Berlin",
+  "users": [
+    {
+      "id": "example-user",
+      "displayName": "Example User",
+      "pin": "0000",
+      "role": "user",
+      "weeklyBudgetMinutes": {
+        "monday": 60,
+        "tuesday": 60,
+        "wednesday": 60,
+        "thursday": 60,
+        "friday": 60,
+        "saturday": 120,
+        "sunday": 120
+      }
+    },
+    {
+      "id": "example-admin",
+      "displayName": "Example Administrator",
+      "pin": "9999",
+      "role": "superuser"
+    }
+  ],
+  "devices": [
+    {
+      "id": "example-tv",
+      "displayName": "Example TV",
+      "aclRuleName": "REPLACE WITH EXACT ACL RULE NAME",
+      "appleTvIdentifier": "REPLACE-WITH-PAIRED-DEVICE-ID"
+    }
+  ]
+}

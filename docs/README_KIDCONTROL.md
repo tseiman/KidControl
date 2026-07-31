@@ -6,6 +6,8 @@ KidControl manages daily usage budgets for multiple wired Apple TVs. Authenticat
 
 A budget can be split into any number of intervals and used across different Apple TVs. For example, a one-hour daily budget can be consumed in sessions of 5, 30, and 25 minutes on one or more devices. Usage is charged with one-second precision, and the remaining time is displayed as `hh:mm:ss`.
 
+The initial-release TypeScript implementation now exists under `code/`. Automated tests cover the policy engine, persistence, UniFi contract, Apple TV adapter behavior, authentication, HTTP API, and restart-sensitive regressions with fake external adapters. Production deployment still requires the live validation checklist in this document.
+
 ## 2. Defined Scope
 
 - initially approximately two, eventually up to ten managed devices;
@@ -150,7 +152,7 @@ Required behavior:
 - The user must press **Start** again.
 - A missing, unsupported, or disconnected signal is `unknown` and must never be interpreted as standby.
 
-The adapter maps a confirmed Companion `Asleep` state to `off`; `Awake`, `Idle`, and `Screensaver` map to `on`. Some tvOS releases do not implement the initial `FetchAttentionState` request, so pushed status events remain authoritative. The final architecture still requires testing with the actual Apple TVs. The test must cover discovery, initial pairing, protected credential storage, initial-state availability, event response time, disconnect/reconnect behavior, and the existing audio outputs.
+The adapter maps a confirmed Companion `Asleep` state to `off`; `Awake`, `Idle`, and `Screensaver` map to `on`. Some tvOS releases do not implement the initial `FetchAttentionState` request, so pushed status events remain authoritative. The underlying library has been validated on one physical Apple TV, including live sleep/wake transitions. KidControl deployment must repeat the end-to-end test for every configured device and tvOS generation. The test covers discovery, initial pairing, protected credential storage, credential reload after restart, initial-state availability, event response time, disconnect/reconnect behavior, and the existing audio outputs.
 
 ## 7. Authentication and User Configuration
 
@@ -179,9 +181,9 @@ Preliminary structure:
 }
 ```
 
-The example PIN is not a production credential. The schema, file path, and validation rules will be finalized before implementation.
+The example PIN is not a production credential. The implemented schema is represented by `config/config.example.json`; production configuration is stored outside Git with mode `0600` and service-user ownership.
 
-Authentication uses a random, server-side revocable cookie with at least `HttpOnly` and `SameSite=Strict`. “Until logout” means a long-lived authenticated session, not storage of the PIN in the browser. Changing a PIN or removing a user must be able to revoke existing sessions.
+Authentication uses a 256-bit random, server-side revocable token. Only its SHA-256 digest is stored. The browser receives a long-lived `Secure`, `HttpOnly`, `SameSite=Strict`, `__Host-` cookie; PINs are never stored in the browser. A keyed HMAC fingerprint using an independent protected authentication pepper invalidates sessions after a PIN or role change, and removing a user invalidates their sessions. Login attempts are throttled independently by source and normalized user ID.
 
 ## 8. Persistence and Restart
 
@@ -204,7 +206,7 @@ State-oriented recovery applies after a restart:
 5. set ACLs according to the recovered state;
 6. read back and log the result.
 
-For a longer service outage, a feasibility test must determine whether the complete interval until restart counts as usage. The safer budget rule is that a previously active session continues to count until KidControl can reliably establish standby or a stop event.
+For a service outage, an active claim is conservatively charged continuously until restart because no reliable stop or standby observation exists during the outage. Accounting is split at every `Europe/Berlin` midnight. If a regular budget expires during downtime, the session ends at the exact calculated exhaustion second rather than at restart time.
 
 ## 9. External ACL Changes
 
@@ -240,23 +242,32 @@ Recommended division:
 
 Node.js can write to stdout/stderr without a dedicated syslog dependency. A systemd service automatically captures this output in the journal, leaving operation and rotation to the existing Debian tools.
 
-## 11. Deliberately Open Technical Decisions
+## 11. Implemented Technical Decisions and Remaining Live Validation
 
-Small feasibility tests are required before production code is written:
+The initial release uses:
 
-1. **Standby:** pair the `node-appletv-remote` Companion adapter with the actual devices and verify initial state, sleep/wake events, disconnects, and reconnection.
-2. **SQLite:** compare modern built-in `node:sqlite` with an established Node.js SQLite library. The goal is Debian 12 compatibility with minimal installation overhead.
-3. **Web stack:** compare a framework-light server/frontend implementation with a small established stack.
-4. **UniFi test:** use a newly generated temporary API key to read, toggle, and read back an explicitly named test ACL.
-5. **Outage window:** test behavior during service downtime, at midnight, and across daylight-saving transitions.
+1. **Runtime:** TypeScript on Node.js `>=22.12.0`.
+2. **Persistence:** built-in `node:sqlite`, foreign keys, WAL, `synchronous=FULL`, a busy timeout, schema versioning, and restrictive file modes.
+3. **Web stack:** framework-light `node:http` with a dependency-free HTML/CSS/JavaScript frontend.
+4. **Apple TV:** `node-appletv-remote` directly from the maintained GitHub fork through `package.json`; no Python process or Git submodule.
+5. **Security:** HTTPS-only public and UniFi origins, a TLS reverse proxy, secure host-bound cookies, CSRF Origin validation, persistent login throttling, and protected runtime files.
+6. **Recovery:** conservative downtime accounting and serialized desired/actual reconciliation with durable pending state.
 
-The implementation will use TypeScript on Node.js. The exact Node.js version, `package.json`, dependency versions, and installation instructions will only be finalized after these tests.
+Remaining live validation before production use:
+
+1. verify every configured Apple TV, tvOS version, and audio-output configuration;
+2. create a new restricted UniFi API key and validate every exact ACL mapping;
+3. validate the chosen reverse proxy and internal CA chain;
+4. exercise restart, controller outage, external ACL changes, and manual restore on the deployment VM;
+5. verify service-user ownership, mode `0600` secrets, systemd sandboxing, backup, and restore.
+
+The reverse proxy is an explicit trust boundary: its address is configured as `TRUSTED_PROXY_IP`, and it must overwrite `X-Forwarded-For` with exactly one validated client address. This preserves per-source login throttling without trusting headers from direct clients.
 
 ## 12. Documentation in the WebUI
 
 The WebUI will render this file as HTML. The deployment process copies this source file into the documentation server's content directory; no documentation symlink is maintained inside the project.
 
-## 13. Acceptance Criteria for a Future Initial Release
+## 13. Initial-Release Acceptance Criteria
 
 - Login through username selection and a four-digit PIN.
 - Long-lived authentication until logout.
@@ -271,3 +282,5 @@ The WebUI will render this file as HTML. The deployment process copies this sour
 - Adoption and logging of external ACL changes.
 - No secrets in the repository.
 - Display of this documentation in the WebUI.
+
+The repository implementation and automated fake-adapter tests satisfy these software criteria. Production acceptance additionally requires the live validation steps in Section 11 and `code/README_CODE.md`.

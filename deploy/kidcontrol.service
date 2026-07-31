@@ -1,0 +1,43 @@
+[Unit]
+Description=KidControl Apple TV access service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kidcontrol
+Group=kidcontrol
+UMask=0077
+WorkingDirectory=/opt/kidcontrol/code
+ExecStart=/usr/bin/node /opt/kidcontrol/code/dist/main.js
+EnvironmentFile=/etc/kidcontrol/kidcontrol.env
+Restart=on-failure
+RestartSec=5s
+StateDirectory=kidcontrol
+StateDirectoryMode=0700
+ConfigurationDirectory=kidcontrol
+ConfigurationDirectoryMode=0700
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+# Node/V8 requires executable JIT memory; MemoryDenyWriteExecute is incompatible.
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+ReadWritePaths=/var/lib/kidcontrol
+
+[Install]
+WantedBy=multi-user.target

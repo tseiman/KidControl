@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#101828">
+  <title>KidControl</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header>
+    <div>
+      <span class="eyebrow">HOME ACCESS</span>
+      <h1>KidControl</h1>
+    </div>
+    <a href="/docs">Documentation</a>
+  </header>
+  <main>
+    <section id="login" class="panel">
+      <h2>Sign in</h2>
+      <p>Choose your name and enter your four-digit PIN.</p>
+      <form id="login-form">
+        <label>Name<select id="user" required></select></label>
+        <label>PIN<input id="pin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="current-password" required></label>
+        <button>Sign in</button>
+      </form>
+    </section>
+
+    <section id="dashboard" hidden>
+      <div class="summary panel">
+        <div>
+          <span class="eyebrow">TIME REMAINING</span>
+          <strong id="remaining">--:--:--</strong>
+        </div>
+        <button id="logout" class="secondary">Log out</button>
+      </div>
+      <p id="message" role="status" aria-live="polite"></p>
+      <div id="devices" class="devices"></div>
+      <button id="stop" class="danger wide">Stop my session</button>
+
+      <section id="admin" class="panel" hidden>
+        <h2>Superuser controls</h2>
+        <form id="adjust">
+          <label>User<select id="target"></select></label>
+          <div class="time-pickers">
+            <label>Hours<select id="hours"></select></label>
+            <label>Minutes<select id="minutes"></select></label>
+          </div>
+          <button>Set remaining time</button>
+        </form>
+        <button id="restore" class="secondary wide">Restore KidControl state</button>
+      </section>
+    </section>
+  </main>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
