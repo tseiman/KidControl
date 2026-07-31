@@ -21,5 +21,9 @@
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
+  },
+  "allowScripts": {
+    "github:tseiman/node-appletv-remote#918c322fc4405707647ab7d607c837231d6abbd0": true,
+    "esbuild@0.28.1": true
   }
 }

@@ -9,7 +9,8 @@ User=kidcontrol
 Group=kidcontrol
 UMask=0077
 WorkingDirectory=/opt/kidcontrol/code
-ExecStart=/usr/bin/node /opt/kidcontrol/code/dist/main.js
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/env node /opt/kidcontrol/code/dist/main.js
 EnvironmentFile=/etc/kidcontrol/kidcontrol.env
 Restart=on-failure
 RestartSec=5s

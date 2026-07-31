@@ -59,7 +59,7 @@ Required:
 
 Optional:
 
-- `UNIFI_CA_FILE` — absolute mode-`0600` custom CA file; TLS verification always remains enabled
+- `UNIFI_CA_FILE` — absolute mode-`0600` private-CA bundle owned by `kidcontrol`; leave empty for publicly trusted certificates because Node.js uses its public trust store
 - `HOST` — listener address, default `127.0.0.1`
 - `PORT` — listener port, default `8080`
 - `POLL_SECONDS` — accounting/reconciliation interval from 1 to 300 seconds, default `5`

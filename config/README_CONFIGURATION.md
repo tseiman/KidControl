@@ -67,7 +67,7 @@ Required values:
 
 Optional values:
 
-- `UNIFI_CA_FILE` — protected custom CA file for UniFi HTTPS
+- `UNIFI_CA_FILE` — leave empty for a publicly trusted UniFi certificate; otherwise use `/etc/kidcontrol/unifi-ca.pem` for a protected private-CA bundle
 - `HOST` — default `127.0.0.1`
 - `PORT` — default `8080`
 - `POLL_SECONDS` — default `5`, allowed range `1` through `300`
@@ -80,7 +80,23 @@ openssl rand -hex 32
 
 Copy the result into the protected environment file. Never reuse the UniFi API key as the pepper.
 
-## 3. Pair every Apple TV
+## 3. CA certificates
+
+For a publicly trusted UniFi certificate, leave `UNIFI_CA_FILE` empty. The UniFi HTTPS server must send its leaf certificate and intermediate certificate(s); Node.js already trusts the public root.
+
+For a private/internal CA only, create `/etc/kidcontrol/unifi-ca.pem`. Put the issuing intermediate CA certificate first and the root CA certificate second. Do not include a private key or the UniFi server's leaf certificate.
+
+```bash
+sudo mcedit /etc/kidcontrol/unifi-ca.pem
+sudo chown kidcontrol:kidcontrol /etc/kidcontrol/unifi-ca.pem
+sudo chmod 0600 /etc/kidcontrol/unifi-ca.pem
+```
+
+Set `UNIFI_CA_FILE=/etc/kidcontrol/unifi-ca.pem` after creating it.
+
+The reverse proxy does not use this trust bundle as its server certificate. The default paths are `/etc/nginx/ssl/kidcontrol.fullchain.pem` for the host-specific leaf certificate followed by intermediate certificate(s), and `/etc/nginx/ssl/kidcontrol.key` for the separate private key. The public root is not included in the served full chain. See the main installation guide for ownership and mode commands.
+
+## 4. Pair every Apple TV
 
 **Runtime credential path:** `/etc/kidcontrol/.atv-credentials.json`
 
