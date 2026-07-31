@@ -143,7 +143,7 @@ sudo -u kidcontrol env HOME=/etc/kidcontrol \
 
 Select exactly one Apple TV and enter the PIN displayed on that device. Repeat the command for every configured Apple TV. The CLI updates `/etc/kidcontrol/.atv-credentials.json` and protects it with mode `0600`. AirPlay pairing with `atv pair` is not required by KidControl.
 
-Copy each credential map's top-level device ID into the matching `appleTvIdentifier` in `/etc/kidcontrol/config.json`. The [configuration quick guide](config/README_CONFIGURATION.md) includes a safe command that prints only these IDs and a read-only power-state verification.
+Copy each credential map's top-level device ID into the matching `appleTvIdentifier` in `/etc/kidcontrol/config.json`. This identifier often looks like a MAC address such as `AA:BB:CC:DD:EE:FF`; it is not the Apple TV name such as `Wohnzimmer`. Do not guess it from UniFi Ethernet or Wi-Fi addresses—copy the exact, case-sensitive top-level key written by `companion-pair`. The [configuration quick guide](config/README_CONFIGURATION.md) includes a safe command that prints only these IDs and a read-only power-state verification.
 
 The HTTPS reverse proxy must preserve the public host and overwrite the client address with exactly one value:
 
@@ -172,6 +172,41 @@ sudo journalctl -u kidcontrol.service -f
 ```
 
 The service binds to `127.0.0.1:8080` by default. Expose it only through the configured HTTPS reverse proxy.
+
+## Updating KidControl
+
+Run the update from the repository cloned during installation. The first status command must produce no output. If it lists local changes, resolve them before continuing; do not overwrite them with an update.
+
+```bash
+cd ~/KidControl
+git status --short
+git pull --ff-only
+cd code
+npm config set allow-git root --location=project
+npm ci
+npm test
+npm run build
+npm prune --omit=dev
+cd ..
+```
+
+Only after the new revision has built and passed all tests, stop the service and install it.
+
+**The following removal is intentionally limited to generated application code and dependencies under `/opt/kidcontrol/code`. It does not remove `/etc/kidcontrol` configuration, Apple TV credentials, or `/var/lib/kidcontrol` SQLite state.**
+
+```bash
+sudo systemctl stop kidcontrol.service
+sudo rm -rf /opt/kidcontrol/code/dist /opt/kidcontrol/code/node_modules
+sudo cp -a code/dist code/node_modules code/package.json code/package-lock.json /opt/kidcontrol/code/
+sudo chown -R root:root /opt/kidcontrol
+sudo install -o root -g root -m 0644 etc/kidcontrol.service /etc/systemd/system/kidcontrol.service
+sudo systemctl daemon-reload
+sudo systemctl start kidcontrol.service
+sudo systemctl status --no-pager kidcontrol.service
+sudo journalctl -u kidcontrol.service -n 50 --no-pager
+```
+
+Do not replace `/etc/kidcontrol/config.json`, `/etc/kidcontrol/kidcontrol.env`, or `/etc/kidcontrol/.atv-credentials.json` during a normal update. Review new example files in Git manually if a release documents a configuration change.
 
 ## Safety semantics
 

@@ -50,6 +50,9 @@ web_modules/
 # Optional npm cache directory
 .npm
 
+# Local npm trust policy created during installation
+.npmrc
+
 # Optional eslint cache
 .eslintcache
 
