@@ -78,6 +78,17 @@ See [`../config/config.example.json`](../config/config.example.json). Important 
 - ACL rule names are unique and matched exactly;
 - every device has a Companion Apple TV identifier.
 
+## Apple TV pairing
+
+Pairing is a mandatory installation step. Every physical Apple TV must be paired separately because Companion credentials are device-specific. With KidControl stopped, run this once per Apple TV after installing the production dependency:
+
+```bash
+sudo -u kidcontrol env HOME=/etc/kidcontrol \
+  /opt/kidcontrol/code/node_modules/.bin/atv companion-pair
+```
+
+Select one device, enter the PIN shown on that Apple TV, wait for `Companion paired!`, and repeat for the next device. The shared `HOME` makes the CLI safely update `/etc/kidcontrol/.atv-credentials.json`; set `APPLETV_CREDENTIALS` to that path. Use each map key exactly as the matching `appleTvIdentifier`. AirPlay pairing with `atv pair` is not required. See the [configuration quick guide](../config/README_CONFIGURATION.md) for safe ID listing and read-only power verification.
+
 ## HTTP and proxy contract
 
 The service validates every `Host` against `PUBLIC_ORIGIN`. Every POST, including login, also requires the exact external `Origin`. The reverse proxy must therefore preserve the public host and terminate HTTPS. It must overwrite, not append to, `X-Forwarded-For` with exactly one client IP. KidControl accepts that header only when the socket peer exactly matches `TRUSTED_PROXY_IP`; a missing, comma-separated, or invalid value is rejected at login. Authentication uses a `Secure`, `HttpOnly`, `SameSite=Strict`, `__Host-` cookie.

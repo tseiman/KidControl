@@ -57,7 +57,7 @@ Required values:
 
 - `KIDCONTROL_CONFIG=/etc/kidcontrol/config.json`
 - `KIDCONTROL_DB=/var/lib/kidcontrol/state.sqlite`
-- `APPLETV_CREDENTIALS=/etc/kidcontrol/apple-tv.json`
+- `APPLETV_CREDENTIALS=/etc/kidcontrol/.atv-credentials.json`
 - `PUBLIC_ORIGIN` — canonical HTTPS origin without a trailing slash
 - `TRUSTED_PROXY_IP` — the single reverse-proxy IP seen by KidControl
 - `KIDCONTROL_AUTH_PEPPER` — independent 32-byte secret as 64 hexadecimal or 43 base64url characters
@@ -80,19 +80,50 @@ openssl rand -hex 32
 
 Copy the result into the protected environment file. Never reuse the UniFi API key as the pepper.
 
-## 3. Apple TV credentials
+## 3. Pair every Apple TV
 
-**Runtime path:** `/etc/kidcontrol/apple-tv.json`
+**Runtime credential path:** `/etc/kidcontrol/.atv-credentials.json`
 
-This file is the credential map produced by the paired `node-appletv-remote` workflow. Each configured `appleTvIdentifier` must have one entry containing Companion credentials.
+Companion credentials are specific to one physical Apple TV. Pairing one device does not authorize any other device. Perform this interactive step on the same network as the Apple TVs, before starting KidControl.
+
+Run the following command once for each Apple TV:
 
 ```bash
-sudo mcedit /etc/kidcontrol/apple-tv.json
-sudo chown kidcontrol:kidcontrol /etc/kidcontrol/apple-tv.json
-sudo chmod 0600 /etc/kidcontrol/apple-tv.json
+sudo -u kidcontrol env HOME=/etc/kidcontrol \
+  /opt/kidcontrol/code/node_modules/.bin/atv companion-pair
 ```
 
-Never place pairing material in the repository, logs, issues, or documentation.
+For each run:
+
+1. Select exactly one Apple TV from the scan result.
+2. Wait for the pairing PIN to appear on that Apple TV.
+3. Enter the displayed PIN at the CLI prompt.
+4. Wait for `Companion paired!` before pairing the next device.
+5. Repeat until every configured Apple TV has been paired.
+
+The CLI creates or updates `/etc/kidcontrol/.atv-credentials.json` as a device-keyed map and enforces mode `0600`. A warning that no AirPlay credentials exist can be ignored for KidControl: KidControl needs Companion pairing, not `atv pair` AirPlay pairing.
+
+Print only the paired device IDs, without displaying credential material:
+
+```bash
+sudo -u kidcontrol /usr/bin/node -e \
+  "const fs=require('node:fs');const p='/etc/kidcontrol/.atv-credentials.json';console.log(Object.keys(JSON.parse(fs.readFileSync(p,'utf8'))).join('\\n'))"
+```
+
+Copy each printed ID exactly into the matching device's `appleTvIdentifier` in `/etc/kidcontrol/config.json`.
+
+Optionally verify one device with a read-only Companion power-state query. The following prompts for the exact paired ID so it does not contain a non-working placeholder:
+
+```bash
+read -r -p "Exact paired Apple TV identifier: " ATV_ID
+sudo -u kidcontrol env HOME=/etc/kidcontrol \
+  /opt/kidcontrol/code/node_modules/.bin/atv power "$ATV_ID"
+unset ATV_ID
+```
+
+A result of `unknown` is not proof of standby. It indicates that no authoritative power state was available.
+
+Never open, copy, log, or commit the serialized credential values. To add another Apple TV later, stop KidControl, run `companion-pair` once for the new device using the same `HOME`, update `config.json`, and restart the service.
 
 ## Apply and verify
 

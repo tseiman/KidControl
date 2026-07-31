@@ -66,12 +66,9 @@ sudo install -o kidcontrol -g kidcontrol -m 0600 config/config.example.json /etc
 sudo install -o root -g root -m 0600 code/.env.example /etc/kidcontrol/kidcontrol.env
 sudo mcedit /etc/kidcontrol/config.json
 sudo mcedit /etc/kidcontrol/kidcontrol.env
-sudo mcedit /etc/kidcontrol/apple-tv.json
-sudo chown kidcontrol:kidcontrol /etc/kidcontrol/apple-tv.json
-sudo chmod 0600 /etc/kidcontrol/apple-tv.json
 ```
 
-Replace every dummy user, PIN, budget, ACL name, Apple TV identifier, path, origin, site ID, and API key. Put the existing paired Companion credential map in `apple-tv.json`.
+Replace every dummy user, PIN, budget, ACL name, Apple TV identifier, path, origin, site ID, and API key.
 
 Generate the required independent authentication pepper once and copy it into `KIDCONTROL_AUTH_PEPPER` in the protected environment file:
 
@@ -80,6 +77,19 @@ openssl rand -hex 32
 ```
 
 Do not commit or share the resulting pepper, UniFi API key, PINs, cookie tokens, or Companion credentials.
+
+### 5. Pair every Apple TV
+
+Each physical Apple TV requires its own one-time Companion pairing. Keep KidControl stopped and run this command once for each Apple TV:
+
+```bash
+sudo -u kidcontrol env HOME=/etc/kidcontrol \
+  /opt/kidcontrol/code/node_modules/.bin/atv companion-pair
+```
+
+Select exactly one Apple TV and enter the PIN displayed on that device. Repeat the command for every configured Apple TV. The CLI updates `/etc/kidcontrol/.atv-credentials.json` and protects it with mode `0600`. AirPlay pairing with `atv pair` is not required by KidControl.
+
+Copy each credential map's top-level device ID into the matching `appleTvIdentifier` in `/etc/kidcontrol/config.json`. The [configuration quick guide](config/README_CONFIGURATION.md) includes a safe command that prints only these IDs and a read-only power-state verification.
 
 The HTTPS reverse proxy must preserve the public host and overwrite the client address with exactly one value:
 
@@ -90,7 +100,7 @@ proxy_set_header X-Forwarded-For $remote_addr;
 
 Set `TRUSTED_PROXY_IP` to the proxy address as seen by KidControl. `PUBLIC_ORIGIN` and `UNIFI_HOST` must both use HTTPS.
 
-### 5. Install and start the systemd service
+### 6. Install and start the systemd service
 
 The checked-in unit is [`etc/kidcontrol.service`](etc/kidcontrol.service).
 
