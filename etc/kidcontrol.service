@@ -35,7 +35,8 @@ LockPersonality=yes
 # Node/V8 requires executable JIT memory; MemoryDenyWriteExecute is incompatible.
 CapabilityBoundingSet=
 AmbientCapabilities=
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# Node os.networkInterfaces() needs AF_NETLINK for mDNS interface discovery.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 SystemCallArchitectures=native
 SystemCallFilter=@system-service
 ReadWritePaths=/var/lib/kidcontrol
