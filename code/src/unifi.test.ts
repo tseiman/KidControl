@@ -32,6 +32,26 @@ describe('hardened UniFi integration', () => {
     expect(fetcher.mock.calls[0]![1]!.signal).toBeInstanceOf(AbortSignal);
   });
 
+  it('preserves official IP protocol and port-rule fields when toggling an ACL', async () => {
+    const ipRule = {
+      ...rule,
+      index: 4,
+      protocolFilter: ['TCP'],
+      destinationFilter: { type: 'PORT', portFilter: ['80', '443'] }
+    };
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: [ipRule] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: { ...ipRule, enabled: false } }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: { ...ipRule, enabled: false } }), { status: 200 }));
+
+    await client(fetcher).setBlocked('tv', false);
+
+    const payload = JSON.parse(String(fetcher.mock.calls[1]![1]!.body));
+    expect(payload.protocolFilter).toEqual(['TCP']);
+    expect(payload.destinationFilter).toEqual({ type: 'PORT', portFilter: ['80', '443'] });
+    expect(payload.index).toBe(4);
+  });
+
   it('disambiguates a thrown PUT with exactly one GET and accepts confirmed success', async () => {
     const fetcher = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ data: [rule] }), { status: 200 }))

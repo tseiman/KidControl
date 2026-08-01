@@ -1,7 +1,7 @@
 import { request as httpsRequest } from 'node:https';
 import type { AclController } from './kid-control.js';
 
-const ALLOWED = ['type', 'name', 'description', 'action', 'networkIdFilter', 'sourceFilter', 'destinationFilter', 'enforcingDeviceFilter', 'enabled'] as const;
+const ALLOWED = ['type', 'name', 'description', 'action', 'index', 'networkIdFilter', 'sourceFilter', 'destinationFilter', 'protocolFilter', 'enforcingDeviceFilter', 'enabled'] as const;
 type Rule = Record<string, unknown> & { id: string; name: string; enabled: boolean };
 type Fetch = (input: string, init?: RequestInit) => Promise<Response>;
 export interface UniFiOptions { timeoutMs?: number; maxResponseBytes?: number; ca?: string | Buffer }
