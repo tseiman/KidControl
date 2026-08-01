@@ -16,13 +16,19 @@
     <a href="/docs">Documentation</a>
   </header>
   <main>
-    <section id="login" class="panel">
+    <p id="message" role="status" aria-live="polite"></p>
+
+    <section id="login" class="panel login-panel">
       <h2>Sign in</h2>
-      <p>Choose your name and enter your four-digit PIN.</p>
+      <p>Choose your profile and enter your four-digit PIN.</p>
       <form id="login-form">
-        <label>Name<select id="user" required></select></label>
+        <fieldset class="profile-fieldset">
+          <legend>Profile</legend>
+          <div id="user-grid" class="user-grid" role="group" aria-label="Choose a profile"></div>
+        </fieldset>
+        <input id="user" type="hidden">
         <label>PIN<input id="pin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="current-password" required></label>
-        <button>Sign in</button>
+        <button id="login-submit" disabled>Sign in</button>
       </form>
     </section>
 
@@ -34,19 +40,25 @@
         </div>
         <button id="logout" class="secondary">Log out</button>
       </div>
-      <p id="message" role="status" aria-live="polite"></p>
       <div id="devices" class="devices"></div>
       <button id="stop" class="danger wide">Stop my session</button>
 
       <section id="admin" class="panel" hidden>
         <h2>Superuser controls</h2>
         <form id="adjust">
-          <label>User<select id="target"></select></label>
+          <div class="picker-field">
+            <span id="target-label" class="field-label">User</span>
+            <div id="target-picker" class="user-picker">
+              <button id="target-trigger" class="user-picker-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="target-label target-trigger"></button>
+              <div id="target-options" class="user-picker-options" role="listbox" aria-labelledby="target-label" hidden></div>
+            </div>
+            <input id="target" type="hidden">
+          </div>
           <div class="time-pickers">
             <label>Hours<select id="hours"></select></label>
             <label>Minutes<select id="minutes"></select></label>
           </div>
-          <button>Set remaining time</button>
+          <button id="adjust-submit">Set remaining time</button>
         </form>
         <button id="restore" class="secondary wide">Restore KidControl state</button>
       </section>

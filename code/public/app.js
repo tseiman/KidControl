@@ -1,7 +1,12 @@
+import { canStart, initials } from './ui-model.js';
+
 const byId = (id) => document.getElementById(id);
 let csrf = '';
 let state = null;
 let lastSync = Date.now();
+let publicUsers = [];
+let selectedLoginUserId = '';
+let adminUsers = [];
 
 function format(seconds) {
   const safe = Math.max(0, Math.floor(seconds));
@@ -30,11 +35,121 @@ function note(value, error = false) {
   byId('message').style.color = error ? 'var(--danger)' : 'var(--accent)';
 }
 
+function avatar(user, className = '') {
+  const wrapper = document.createElement('span');
+  wrapper.className = `avatar ${className}`.trim();
+  const fallback = document.createElement('span');
+  fallback.className = 'avatar-initials';
+  fallback.textContent = initials(user.displayName);
+  wrapper.append(fallback);
+  if (user.iconUrl) {
+    const image = document.createElement('img');
+    image.src = user.iconUrl;
+    image.alt = '';
+    image.decoding = 'async';
+    image.addEventListener('error', () => image.remove(), { once: true });
+    wrapper.prepend(image);
+  }
+  return wrapper;
+}
+
+function renderLoginUsers(users) {
+  publicUsers = users;
+  if (!users.some((user) => user.id === selectedLoginUserId)) selectedLoginUserId = '';
+  byId('user').value = selectedLoginUserId;
+  byId('login-submit').disabled = !selectedLoginUserId;
+  byId('user-grid').replaceChildren(...users.map((user) => {
+    const button = document.createElement('button');
+    const selected = user.id === selectedLoginUserId;
+    button.type = 'button';
+    button.className = `user-tile${selected ? ' selected' : ''}`;
+    button.setAttribute('aria-pressed', String(selected));
+    button.append(avatar(user, 'avatar-login'));
+    const name = document.createElement('span');
+    name.className = 'user-tile-name';
+    name.textContent = user.displayName;
+    button.append(name);
+    button.addEventListener('click', () => {
+      selectedLoginUserId = user.id;
+      renderLoginUsers(publicUsers);
+      byId('pin').focus();
+    });
+    return button;
+  }));
+}
+
 function statusLine(device) {
   const line = document.createElement('p');
   line.className = 'device-status';
   line.textContent = `Power: ${device.power} · Network: ${device.acl}`;
   return line;
+}
+
+function pickerUserRow(user) {
+  const row = document.createElement('span');
+  row.className = 'picker-user-row';
+  row.append(avatar(user, 'avatar-picker'));
+  const copy = document.createElement('span');
+  copy.className = 'picker-user-copy';
+  const name = document.createElement('strong');
+  name.textContent = user.displayName;
+  const remaining = document.createElement('span');
+  remaining.textContent = `${format(user.remainingSeconds)} remaining`;
+  copy.append(name, remaining);
+  row.append(copy);
+  return row;
+}
+
+function closeTargetPicker(focusTrigger = false) {
+  byId('target-options').hidden = true;
+  byId('target-trigger').setAttribute('aria-expanded', 'false');
+  if (focusTrigger) byId('target-trigger').focus();
+}
+
+function selectTarget(userId, focusTrigger = false, closePicker = true) {
+  const user = adminUsers.find((candidate) => candidate.id === userId) ?? adminUsers[0];
+  byId('target').value = user?.id ?? '';
+  byId('target-trigger').replaceChildren(user ? pickerUserRow(user) : document.createTextNode('No regular users'));
+  byId('target-trigger').disabled = !user;
+  byId('adjust-submit').disabled = !user;
+  for (const option of byId('target-options').querySelectorAll('[role="option"]')) {
+    option.setAttribute('aria-selected', String(option.dataset.userId === user?.id));
+  }
+  if (closePicker) closeTargetPicker(focusTrigger);
+}
+
+function renderTargetPicker(users) {
+  const prior = byId('target').value;
+  const options = byId('target-options');
+  const wasOpen = !options.hidden;
+  const focusedUserId = options.contains(document.activeElement)
+    ? document.activeElement.dataset.userId
+    : undefined;
+  adminUsers = users;
+  options.replaceChildren(...users.map((user) => {
+    const option = document.createElement('button');
+    option.type = 'button';
+    option.className = 'user-picker-option';
+    option.setAttribute('role', 'option');
+    option.dataset.userId = user.id;
+    option.append(pickerUserRow(user));
+    option.addEventListener('click', () => selectTarget(user.id, true));
+    return option;
+  }));
+  selectTarget(users.some((user) => user.id === prior) ? prior : users[0]?.id, false, false);
+  if (!users.length) {
+    closeTargetPicker();
+  } else if (wasOpen) {
+    openTargetPicker();
+    [...options.querySelectorAll('[role="option"]')]
+      .find((option) => option.dataset.userId === focusedUserId)?.focus();
+  }
+}
+
+function openTargetPicker() {
+  if (byId('target-trigger').disabled) return;
+  byId('target-options').hidden = false;
+  byId('target-trigger').setAttribute('aria-expanded', 'true');
 }
 
 async function refresh() {
@@ -53,18 +168,14 @@ async function refresh() {
     details.append(title, statusLine(device));
     const button = document.createElement('button');
     button.textContent = active ? 'Active' : 'Start';
-    button.disabled = active || (state.me.role !== 'superuser' && device.power !== 'on');
+    button.disabled = !canStart(state.me.role, device.power, active);
     button.onclick = () => mutate('/api/claim', { deviceId: device.id });
     card.append(details, button);
     return card;
   }));
   byId('stop').hidden = !state.activeDeviceId;
   byId('admin').hidden = state.me.role !== 'superuser';
-  if (state.users) {
-    byId('target').replaceChildren(...state.users.map((user) => new Option(
-      `${user.displayName} — ${format(user.remainingSeconds)}`, user.id
-    )));
-  }
+  if (state.users) renderTargetPicker(state.users);
 }
 
 async function mutate(path, value = {}) {
@@ -72,15 +183,22 @@ async function mutate(path, value = {}) {
     await api(path, { method: 'POST', body: JSON.stringify(value) });
     note('State updated.');
     await refresh();
-  } catch (error) { note(error.message, true); }
+  } catch (error) {
+    if (error.message === 'Apple TV is not on') {
+      await refresh().catch(() => undefined);
+      return;
+    }
+    note(error.message, true);
+  }
 }
 
 byId('login-form').onsubmit = async (event) => {
   event.preventDefault();
+  if (!selectedLoginUserId) return;
   try {
     const result = await api('/api/login', {
       method: 'POST',
-      body: JSON.stringify({ userId: byId('user').value, pin: byId('pin').value })
+      body: JSON.stringify({ userId: selectedLoginUserId, pin: byId('pin').value })
     });
     csrf = result.csrf;
     byId('pin').value = '';
@@ -99,9 +217,33 @@ byId('logout').onclick = async () => {
 };
 byId('adjust').onsubmit = (event) => {
   event.preventDefault();
+  if (!byId('target').value) return;
   const seconds = (Number(byId('hours').value) * 60 + Number(byId('minutes').value)) * 60;
   void mutate('/api/admin/adjust', { userId: byId('target').value, remainingSeconds: seconds });
 };
+byId('target-trigger').addEventListener('click', () => {
+  if (byId('target-options').hidden) openTargetPicker(); else closeTargetPicker();
+});
+byId('target-trigger').addEventListener('keydown', (event) => {
+  if (event.key !== 'ArrowDown') return;
+  event.preventDefault();
+  openTargetPicker();
+  byId('target-options').querySelector('[role="option"]')?.focus();
+});
+byId('target-options').addEventListener('keydown', (event) => {
+  const options = [...byId('target-options').querySelectorAll('[role="option"]')];
+  const current = options.indexOf(document.activeElement);
+  if (event.key === 'Escape') {
+    event.preventDefault(); closeTargetPicker(true); return;
+  }
+  if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
+  event.preventDefault();
+  const offset = event.key === 'ArrowDown' ? 1 : -1;
+  options[(current + offset + options.length) % options.length]?.focus();
+});
+document.addEventListener('click', (event) => {
+  if (!event.target.closest('#target-picker')) closeTargetPicker();
+});
 for (let value = 0; value <= 24; value++) byId('hours').append(new Option(String(value).padStart(2, '0'), String(value)));
 for (let value = 0; value < 60; value++) byId('minutes').append(new Option(String(value).padStart(2, '0'), String(value)));
 
@@ -116,7 +258,7 @@ setInterval(() => {
 
 (async () => {
   const choices = await api('/api/public');
-  byId('user').replaceChildren(...choices.users.map((user) => new Option(user.displayName, user.id)));
+  renderLoginUsers(choices.users);
   try {
     const session = await api('/api/session');
     csrf = session.csrf;

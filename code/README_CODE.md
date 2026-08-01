@@ -13,7 +13,7 @@ This directory contains the production TypeScript service, automated tests, and 
 - `src/server.ts` — framework-light `node:http` API and static WebUI
 - `src/runtime.ts` — deployment environment validation
 - `src/main.ts` — production wiring and graceful shutdown
-- `public/` — dependency-free smartphone WebUI
+- `public/` — dependency-free smartphone WebUI with profile tiles, safe icon fallbacks, and an accessible superuser picker
 
 The policy engine serializes all local mutations and reconciliation work through one queue. External network calls never run inside a SQLite transaction.
 
@@ -77,6 +77,9 @@ See [`../config/config.example.json`](../config/config.example.json). Important 
 - superusers do not define a budget;
 - ACL rule names are unique and matched exactly;
 - every device has a Companion Apple TV identifier.
+- each optional user `icon` is a simple PNG, JPEG, or WebP filename served from `/etc/kidcontrol/icons` through the user-ID-based icon endpoint.
+
+Regular users can create a claim only while the latest authoritative Apple TV power state is `on`. The WebUI mirrors this rule with a disabled Start button and the serialized core enforces it against direct API calls. Superusers may create claims while power is `off` or `unknown`.
 
 ## Apple TV pairing
 

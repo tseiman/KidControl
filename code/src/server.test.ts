@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { once } from 'node:events';
 import { request } from 'node:http';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Store } from './store.js';
@@ -89,9 +89,20 @@ describe('hardened HTTP API and local smoke journey', () => {
     expect(icon.headers.get('content-type')).toBe('image/webp');
     expect(new Uint8Array(await icon.arrayBuffer())).toEqual(new Uint8Array([0x52, 0x49, 0x46, 0x46]));
     expect((await call('/api/user-icons/root', { headers: { host: 'kidcontrol.test' } })).status).toBe(404);
+    writeFileSync(join(iconDir, 'outside.webp'), Buffer.from([1]));
+    rmSync(join(iconDir, 'kid.webp'));
+    symlinkSync(join(iconDir, 'outside.webp'), join(iconDir, 'kid.webp'));
+    expect((await call('/api/user-icons/kid', { headers: { host: 'kidcontrol.test' } })).status).toBe(404);
     const session = await login();
     const status = await call('/api/status', { headers: { host: 'kidcontrol.test', cookie: session.cookie } });
     expect(await status.json()).toMatchObject({ devices: [{ id: 'tv', displayName: 'Family TV', power: 'unknown', acl: 'unknown' }] });
+  });
+
+  it('serves the browser policy module used by the built application', async () => {
+    const response = await call('/ui-model.js', { headers: { host: 'kidcontrol.test' } });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('text/javascript; charset=utf-8');
+    expect(await response.text()).toContain('export function canStart');
   });
 
   it('uses only a single validated client address supplied by the trusted proxy', async () => {
