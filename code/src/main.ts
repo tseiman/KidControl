@@ -39,7 +39,7 @@ async function main(): Promise<void> {
   const monitor = AppleTvMonitor.production(config.devices, credentialText, (device, state) => core.powerChanged(device, state));
 
   const server = createKidControlServer(config, core, auth, {
-    publicDir: new URL('./public/', import.meta.url), documentation, publicOrigin: settings.publicOrigin,
+    publicDir: new URL('./public/', import.meta.url), iconDir: '/etc/kidcontrol/icons', documentation, publicOrigin: settings.publicOrigin,
     trustedProxyIp: settings.trustedProxyIp
   });
   await startResources({ core, monitor, server, store }, settings.port, settings.host);

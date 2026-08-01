@@ -23,6 +23,7 @@ Regular user fields:
 
 - `id` — unique stable identifier
 - `displayName` — name shown in the WebUI
+- `icon` — optional PNG, JPEG, or WebP filename stored under `/etc/kidcontrol/icons`; paths are not accepted
 - `pin` — exactly four digits
 - `role` — `user`
 - `weeklyBudgetMinutes` — all seven English weekday names, each from `0` through `1499`
@@ -30,8 +31,20 @@ Regular user fields:
 Superuser fields:
 
 - `id`, `displayName`, and four-digit `pin`
+- optional `icon` with the same filename rules as a regular user
 - `role` — `superuser`
 - no `weeklyBudgetMinutes`
+
+### User icons
+
+Keep user images outside Git under `/etc/kidcontrol/icons`. There is intentionally no browser upload endpoint. Upload a source image to a temporary administrator-controlled location, then install it with a simple filename that matches `config.json`:
+
+```bash
+sudo install -d -o root -g kidcontrol -m 0750 /etc/kidcontrol/icons
+sudo install -o root -g kidcontrol -m 0640 /path/to/anna.webp /etc/kidcontrol/icons/anna.webp
+```
+
+Supported extensions are `.png`, `.jpg`, `.jpeg`, and `.webp`; each file must be no larger than 5 MiB. Square and rectangular images are displayed as circular, center-cropped portraits using `object-fit: cover`. If `icon` is omitted, missing, or unreadable, the WebUI displays safe initials instead. Restart KidControl after changing `config.json`; replacing an image with the same filename may remain browser-cached for up to five minutes.
 
 Device fields:
 

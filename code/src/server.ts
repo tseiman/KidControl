@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { readFileSync } from 'node:fs';
+import { lstatSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { isIP } from 'node:net';
@@ -7,7 +7,7 @@ import type { Config } from './domain.js';
 import type { KidControl } from './kid-control.js';
 import { RateLimitError, type Auth } from './auth.js';
 
-interface Options { publicDir: string | URL; documentation: string; publicOrigin: string; trustedProxyIp: string; bodyLimitBytes?: number }
+interface Options { publicDir: string | URL; iconDir: string; documentation: string; publicOrigin: string; trustedProxyIp: string; bodyLimitBytes?: number }
 const COOKIE = '__Host-kidcontrol';
 const securityHeaders = {
   'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer',
@@ -47,7 +47,8 @@ function send(res: ServerResponse, status: number, value?: unknown, headers: Rec
   res.setHeader('Content-Type', typeof value === 'string' ? 'text/html; charset=utf-8' : 'application/json; charset=utf-8');
   res.end(typeof value === 'string' ? value : JSON.stringify(value));
 }
-const userView = (user: Config['users'][number]) => ({ id: user.id, displayName: user.displayName, role: user.role });
+const iconUrl = (user: Config['users'][number]) => user.icon ? `/api/user-icons/${encodeURIComponent(user.id)}` : undefined;
+const userView = (user: Config['users'][number]) => ({ id: user.id, displayName: user.displayName, role: user.role, ...(user.icon ? { iconUrl: iconUrl(user) } : {}) });
 const normalizedIp = (value: string) => value.startsWith('::ffff:') && isIP(value.slice(7)) === 4 ? value.slice(7) : value;
 function clientSource(req: IncomingMessage, trustedProxyIp: string): string {
   const socketAddress = normalizedIp(req.socket.remoteAddress ?? '');
@@ -80,7 +81,25 @@ export function createKidControlServer(config: Config, core: KidControl, auth: A
         return send(res, 200, { status: degraded ? 'degraded' : 'ok' }, { 'Cache-Control': 'no-store' });
       }
       if (method === 'GET' && url.pathname === '/api/public') {
-        return send(res, 200, { users: config.users.map(({ id, displayName }) => ({ id, displayName })) }, { 'Cache-Control': 'no-store' });
+        return send(res, 200, { users: config.users.map((user) => ({ id: user.id, displayName: user.displayName, ...(user.icon ? { iconUrl: iconUrl(user) } : {}) })) }, { 'Cache-Control': 'no-store' });
+      }
+      if (method === 'GET' && url.pathname.startsWith('/api/user-icons/')) {
+        const user = config.users.find((candidate) => iconUrl(candidate) === url.pathname);
+        if (!user?.icon) return send(res, 404, { error: 'not found' }, { 'Cache-Control': 'no-store' });
+        try {
+          const path = join(options.iconDir, user.icon);
+          const status = lstatSync(path);
+          if (!status.isFile() || status.size > 5 * 1024 * 1024) return send(res, 404, { error: 'not found' }, { 'Cache-Control': 'no-store' });
+          const extension = user.icon.toLowerCase().split('.').pop();
+          const types: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' };
+          for (const [key, value] of Object.entries(securityHeaders)) res.setHeader(key, value);
+          res.setHeader('Content-Type', types[extension!]!);
+          res.setHeader('Cache-Control', 'public, max-age=300');
+          res.end(readFileSync(path));
+          return;
+        } catch {
+          return send(res, 404, { error: 'not found' }, { 'Cache-Control': 'no-store' });
+        }
       }
       if (method === 'POST' && url.pathname === '/api/login') {
         const input = await body(req, bodyLimit);
@@ -113,7 +132,7 @@ export function createKidControlServer(config: Config, core: KidControl, auth: A
         return send(res, 200, {
           me: userView(user), remainingSeconds: state.remainingSeconds, unlimited: state.unlimited,
           activeDeviceId: state.activeDeviceId, devices: core.deviceStatuses(),
-          ...(user.role === 'superuser' ? { users: config.users.filter((item) => item.role === 'user').map((item) => ({ id: item.id, displayName: item.displayName, remainingSeconds: core.status(item.id).remainingSeconds })) } : {})
+          ...(user.role === 'superuser' ? { users: config.users.filter((item) => item.role === 'user').map((item) => ({ id: item.id, displayName: item.displayName, ...(item.icon ? { iconUrl: iconUrl(item) } : {}), remainingSeconds: core.status(item.id).remainingSeconds })) } : {})
         }, { 'Cache-Control': 'no-store' });
       }
       if (method !== 'POST') return send(res, 404, { error: 'not found' }, { 'Cache-Control': 'no-store' });

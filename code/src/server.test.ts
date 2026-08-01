@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { once } from 'node:events';
 import { request } from 'node:http';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { Store } from './store.js';
 import { KidControl } from './kid-control.js';
 import { Auth } from './auth.js';
@@ -8,25 +11,27 @@ import { createKidControlServer } from './server.js';
 import type { Config } from './domain.js';
 
 const config: Config = { timezone: 'Europe/Berlin', users: [
-  { id: 'kid', displayName: 'Kid', pin: '1234', role: 'user', weeklyBudgetMinutes: { monday: 10, tuesday: 10, wednesday: 10, thursday: 10, friday: 10, saturday: 10, sunday: 10 } },
+  { id: 'kid', displayName: 'Kid', icon: 'kid.webp', pin: '1234', role: 'user', weeklyBudgetMinutes: { monday: 10, tuesday: 10, wednesday: 10, thursday: 10, friday: 10, saturday: 10, sunday: 10 } },
   { id: 'root', displayName: 'Root', pin: '9999', role: 'superuser' }
 ], devices: [{ id: 'tv', displayName: 'Family TV', aclRuleName: 'KC TV', appleTvIdentifier: 'atv' }] };
 const origin = 'https://kidcontrol.test';
 
 describe('hardened HTTP API and local smoke journey', () => {
-  let store: Store; let server: ReturnType<typeof createKidControlServer>; let base: string; let auth: Auth; let core: KidControl;
+  let store: Store; let server: ReturnType<typeof createKidControlServer>; let base: string; let auth: Auth; let core: KidControl; let iconDir: string;
   beforeEach(async () => {
+    iconDir = mkdtempSync(join(tmpdir(), 'kidcontrol-icons-'));
+    writeFileSync(join(iconDir, 'kid.webp'), Buffer.from([0x52, 0x49, 0x46, 0x46]));
     store = new Store(':memory:');
     core = new KidControl(config, store, { read: async () => true, setBlocked: vi.fn(async () => undefined) }, () => new Date('2026-07-31T12:00:00Z'));
     auth = new Auth(store, () => config.users, Buffer.alloc(32, 9));
     server = createKidControlServer(config, core, auth, {
       publicDir: new URL('../public/', import.meta.url), documentation: '# KidControl\n\nSafe docs.',
-      publicOrigin: origin, trustedProxyIp: '127.0.0.1'
+      publicOrigin: origin, trustedProxyIp: '127.0.0.1', iconDir
     });
     server.listen(0, '127.0.0.1'); await once(server, 'listening');
     const address = server.address(); base = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}`;
   });
-  afterEach(async () => { server.close(); await once(server, 'close'); store.close(); });
+  afterEach(async () => { server.close(); await once(server, 'close'); store.close(); rmSync(iconDir, { recursive: true }); });
   const headers = { host: 'kidcontrol.test', origin, 'x-forwarded-for': '192.0.2.10' };
   async function call(path: string, init: { method?: string; headers?: Record<string, string>; body?: string } = {}): Promise<Response> {
     return await new Promise<Response>((resolve, reject) => {
@@ -76,6 +81,14 @@ describe('hardened HTTP API and local smoke journey', () => {
   it('never leaks PINs and returns device power and ACL status without other regular claims', async () => {
     const publicResponse = await call('/api/public', { headers: { host: 'kidcontrol.test' } });
     const text = await publicResponse.text(); expect(text).not.toContain('1234');
+    const publicBody = JSON.parse(text) as { users: Array<{ id: string; displayName: string; iconUrl?: string }> };
+    expect(publicBody.users.find((user) => user.id === 'kid')).toEqual({ id: 'kid', displayName: 'Kid', iconUrl: '/api/user-icons/kid' });
+    expect(text).not.toContain('kid.webp');
+    const icon = await call('/api/user-icons/kid', { headers: { host: 'kidcontrol.test' } });
+    expect(icon.status).toBe(200);
+    expect(icon.headers.get('content-type')).toBe('image/webp');
+    expect(new Uint8Array(await icon.arrayBuffer())).toEqual(new Uint8Array([0x52, 0x49, 0x46, 0x46]));
+    expect((await call('/api/user-icons/root', { headers: { host: 'kidcontrol.test' } })).status).toBe(404);
     const session = await login();
     const status = await call('/api/status', { headers: { host: 'kidcontrol.test', cookie: session.cookie } });
     expect(await status.json()).toMatchObject({ devices: [{ id: 'tv', displayName: 'Family TV', power: 'unknown', acl: 'unknown' }] });

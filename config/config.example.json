@@ -4,6 +4,7 @@
     {
       "id": "example-user",
       "displayName": "Example User",
+      "icon": "example-user.webp",
       "pin": "0000",
       "role": "user",
       "weeklyBudgetMinutes": {
@@ -19,6 +20,7 @@
     {
       "id": "example-admin",
       "displayName": "Example Administrator",
+      "icon": "example-admin.jpg",
       "pin": "9999",
       "role": "superuser"
     }

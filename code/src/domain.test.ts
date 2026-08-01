@@ -17,6 +17,13 @@ describe('configuration and time domain', () => {
     expect(budgetFor(config.users[0]!, new Date('2026-07-31T12:00:00Z'), config.timezone)).toBe(3600);
   });
 
+  it('accepts safe optional user icon filenames and rejects paths or unsupported formats', () => {
+    const withIcon = { ...config, users: [{ ...config.users[0], icon: 'kid-profile.webp' }, config.users[1]] };
+    expect(validateConfig(withIcon).users[0]?.icon).toBe('kid-profile.webp');
+    expect(() => validateConfig({ ...config, users: [{ ...config.users[0], icon: '../kid.png' }] })).toThrow('user icon');
+    expect(() => validateConfig({ ...config, users: [{ ...config.users[0], icon: 'kid.svg' }] })).toThrow('user icon');
+  });
+
   it.each([
     [{ ...config, timezone: 'UTC' }, 'timezone'],
     [{ ...config, users: [{ ...config.users[0], pin: '12' }] }, 'four digits'],

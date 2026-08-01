@@ -76,6 +76,7 @@ The Node.js archive includes npm 10, so the installation upgrades it to the test
 sudo useradd --system --home-dir /var/lib/kidcontrol --shell /usr/sbin/nologin kidcontrol
 sudo install -d -o root -g root -m 0755 /opt/kidcontrol/code
 sudo install -d -o kidcontrol -g kidcontrol -m 0700 /etc/kidcontrol
+sudo install -d -o root -g kidcontrol -m 0750 /etc/kidcontrol/icons
 sudo install -d -o kidcontrol -g kidcontrol -m 0700 /var/lib/kidcontrol
 ```
 

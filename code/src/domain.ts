@@ -1,7 +1,7 @@
 export const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
 export type Weekday = typeof WEEKDAYS[number];
 export type Role = 'user' | 'superuser';
-export interface UserConfig { id: string; displayName: string; pin: string; role: Role; weeklyBudgetMinutes?: Record<Weekday, number> }
+export interface UserConfig { id: string; displayName: string; icon?: string; pin: string; role: Role; weeklyBudgetMinutes?: Record<Weekday, number> }
 export interface DeviceConfig { id: string; displayName: string; aclRuleName: string; appleTvIdentifier: string }
 export interface Config { timezone: string; users: UserConfig[]; devices: DeviceConfig[] }
 
@@ -24,6 +24,10 @@ export function validateConfig(value: unknown): Config {
     if (role !== 'user' && role !== 'superuser') throw new Error('role must be user or superuser');
     const pin = text(item.pin, 'pin');
     if (!/^\d{4}$/.test(pin)) throw new Error('pin must contain exactly four digits');
+    const icon = item.icon === undefined ? undefined : text(item.icon, 'user icon');
+    if (icon && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.(?:png|jpe?g|webp)$/i.test(icon)) {
+      throw new Error('user icon must be a PNG, JPEG, or WebP filename without a path');
+    }
     let weeklyBudgetMinutes: Record<Weekday, number> | undefined;
     if (role === 'user') {
       const source = object(item.weeklyBudgetMinutes);
@@ -34,7 +38,7 @@ export function validateConfig(value: unknown): Config {
         weeklyBudgetMinutes[day] = minutes as number;
       }
     }
-    return { id: text(item.id, 'user id'), displayName: text(item.displayName, 'displayName'), pin, role, ...(weeklyBudgetMinutes ? { weeklyBudgetMinutes } : {}) };
+    return { id: text(item.id, 'user id'), displayName: text(item.displayName, 'displayName'), ...(icon ? { icon } : {}), pin, role, ...(weeklyBudgetMinutes ? { weeklyBudgetMinutes } : {}) };
   });
   const devices: DeviceConfig[] = root.devices.map((raw) => {
     const item = object(raw);
