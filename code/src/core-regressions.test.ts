@@ -27,7 +27,7 @@ describe('mandatory accounting and reconciliation regressions', () => {
   let physical: Record<string, boolean>;
   let app: KidControl;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     now = new Date('2026-07-31T12:00:00.500Z');
     store = new Store(':memory:');
     writes = [];
@@ -36,6 +36,8 @@ describe('mandatory accounting and reconciliation regressions', () => {
       read: async (id) => physical[id]!,
       setBlocked: async (id, blocked) => { writes.push([id, blocked]); physical[id] = blocked; }
     }, () => now);
+    await app.powerChanged('one', 'on');
+    await app.powerChanged('two', 'on');
   });
   afterEach(() => store.close());
 

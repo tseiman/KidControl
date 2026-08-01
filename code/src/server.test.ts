@@ -61,6 +61,7 @@ describe('hardened HTTP API and local smoke journey', () => {
     const boot = await call('/api/session', { headers: { host: 'kidcontrol.test', cookie: session.cookie } });
     const body = await boot.json() as { csrf: string; user: { id: string } };
     expect(body.user.id).toBe('kid'); expect(body.csrf).not.toBe(session.body.csrf);
+    await core.powerChanged('tv', 'on');
     const claim = await call('/api/claim', { method: 'POST', headers: { ...headers, cookie: session.cookie, 'x-csrf-token': body.csrf, 'content-type': 'application/json' }, body: '{"deviceId":"tv"}' });
     expect(claim.status).toBe(204);
   });
@@ -95,6 +96,7 @@ describe('hardened HTTP API and local smoke journey', () => {
   });
 
   it('returns 403 when a regular user targets a device reserved by a superuser', async () => {
+    await core.powerChanged('tv', 'on');
     const root = await login('root', '9999');
     await call('/api/claim', {
       method: 'POST',
@@ -108,6 +110,25 @@ describe('hardened HTTP API and local smoke journey', () => {
       body: '{"deviceId":"tv"}'
     });
     expect(response.status).toBe(403);
+  });
+
+  it('rejects a regular claim unless power is confirmed on while allowing a superuser', async () => {
+    const kid = await login();
+    const denied = await call('/api/claim', {
+      method: 'POST',
+      headers: { ...headers, cookie: kid.cookie, 'x-csrf-token': kid.body.csrf, 'content-type': 'application/json' },
+      body: '{"deviceId":"tv"}'
+    });
+    expect(denied.status).toBe(409);
+    expect(await denied.json()).toEqual({ error: 'Apple TV is not on' });
+
+    const root = await login('root', '9999');
+    const allowed = await call('/api/claim', {
+      method: 'POST',
+      headers: { ...headers, cookie: root.cookie, 'x-csrf-token': root.body.csrf, 'content-type': 'application/json' },
+      body: '{"deviceId":"tv"}'
+    });
+    expect(allowed.status).toBe(204);
   });
 
   it('rejects oversized Content-Length before reading and configures production timeouts', async () => {

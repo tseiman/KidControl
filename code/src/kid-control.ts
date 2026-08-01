@@ -39,6 +39,11 @@ export class KidControl {
   }
   private now(): number { return Math.floor(this.clock().getTime() / 1000); }
 
+  private power(deviceId: string): Power {
+    const row = this.store.db.prepare('SELECT state FROM power_state WHERE device_id=?').get(deviceId) as { state: Power } | undefined;
+    return row?.state ?? 'unknown';
+  }
+
   private remainingAt(user: UserConfig, epochSecond: number): number {
     if (user.role === 'superuser') return Number.MAX_SAFE_INTEGER;
     const at = new Date(epochSecond * 1000);
@@ -60,12 +65,11 @@ export class KidControl {
 
   deviceStatuses() {
     return this.config.devices.map((device) => {
-      const power = this.store.db.prepare('SELECT state FROM power_state WHERE device_id=?').get(device.id) as { state: Power } | undefined;
       const acl = this.store.aclState(device.id);
       return {
         id: device.id,
         displayName: device.displayName,
-        power: power?.state ?? 'unknown',
+        power: this.power(device.id),
         acl: acl?.actualBlocked === null || !acl ? 'unknown' : acl.pending ? 'degraded' : acl.actualBlocked ? 'blocked' : 'allowed'
       };
     });
@@ -160,6 +164,7 @@ export class KidControl {
     this.device(deviceId);
     const existing = this.store.claim(userId);
     if (existing?.deviceId === deviceId) return;
+    if (user.role === 'user' && this.power(deviceId) !== 'on') throw new Error('Apple TV is not on');
     if (existing) {
       this.chargeInternal(userId);
       this.store.end(userId, 'switch', this.now());

@@ -141,9 +141,10 @@ export function createKidControlServer(config: Config, core: KidControl, auth: A
       if (message === 'invalid credentials') return send(res, 401, { error: 'invalid credentials' }, { 'Cache-Control': 'no-store' });
       const authorizationError = /reserved by superuser|superuser required/.test(message);
       const clientError = /unknown|invalid|exhausted|required|00:00|too large/.test(message);
-      if (!clientError && !authorizationError) console.error('request failed', message);
-      const status = authorizationError ? 403 : clientError ? (message.includes('too large') ? 413 : 400) : 500;
-      send(res, status, { error: clientError || authorizationError ? message : 'internal server error' }, { 'Cache-Control': 'no-store' });
+      const powerConflict = message === 'Apple TV is not on';
+      if (!clientError && !authorizationError && !powerConflict) console.error('request failed', message);
+      const status = authorizationError ? 403 : powerConflict ? 409 : clientError ? (message.includes('too large') ? 413 : 400) : 500;
+      send(res, status, { error: clientError || authorizationError || powerConflict ? message : 'internal server error' }, { 'Cache-Control': 'no-store' });
     }
   });
   server.requestTimeout = 15_000;

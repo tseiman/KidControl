@@ -19,11 +19,13 @@ const config: Config = {
 
 describe('claim, accounting and reconciliation policy', () => {
   let now: Date; let store: Store; let acl: { setBlocked: ReturnType<typeof vi.fn> }; let app: KidControl;
-  beforeEach(() => {
+  beforeEach(async () => {
     now = new Date('2026-07-31T12:00:00Z');
     store = new Store(':memory:');
     acl = { setBlocked: vi.fn(async () => undefined) };
     app = new KidControl(config, store, acl, () => now);
+    await app.powerChanged('one', 'on');
+    await app.powerChanged('two', 'on');
   });
   afterEach(() => store.close());
   const advance = (seconds: number) => { now = new Date(now.getTime() + seconds * 1000); };
@@ -64,6 +66,19 @@ describe('claim, accounting and reconciliation policy', () => {
   it('unknown and on power states never end claims', async () => {
     await app.start('a', 'one'); await app.powerChanged('one', 'unknown'); await app.powerChanged('one', 'on');
     expect(store.activeClaims()).toHaveLength(1);
+  });
+
+  it('requires confirmed power on for regular users but not for superusers', async () => {
+    await app.powerChanged('one', 'unknown');
+    await expect(app.start('a', 'one')).rejects.toThrow('Apple TV is not on');
+    expect(store.activeClaims()).toEqual([]);
+
+    await app.start('root', 'one');
+    await app.stop('root');
+    await app.powerChanged('one', 'off');
+
+    await expect(app.start('a', 'one')).rejects.toThrow('Apple TV is not on');
+    await expect(app.start('root', 'one')).resolves.toBeUndefined();
   });
 
   it('sets remaining time directly, identifies the author, and can restore exhausted time', async () => {

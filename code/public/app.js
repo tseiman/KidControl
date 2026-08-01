@@ -45,14 +45,15 @@ async function refresh() {
   byId('remaining').textContent = state.unlimited ? 'Unlimited' : format(state.remainingSeconds);
   byId('devices').replaceChildren(...state.devices.map((device) => {
     const card = document.createElement('article');
-    card.className = `device${device.id === state.activeDeviceId ? ' active' : ''}`;
+    const active = device.id === state.activeDeviceId;
+    card.className = `device${active ? ' active' : ''}`;
     const details = document.createElement('div');
     const title = document.createElement('h2');
     title.textContent = device.displayName;
     details.append(title, statusLine(device));
     const button = document.createElement('button');
-    button.textContent = device.id === state.activeDeviceId ? 'Active' : 'Start';
-    button.disabled = device.id === state.activeDeviceId;
+    button.textContent = active ? 'Active' : 'Start';
+    button.disabled = active || (state.me.role !== 'superuser' && device.power !== 'on');
     button.onclick = () => mutate('/api/claim', { deviceId: device.id });
     card.append(details, button);
     return card;
