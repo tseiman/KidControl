@@ -27,6 +27,15 @@ header {
 }
 .header-links { display: grid; justify-items: end; gap: .15rem; }
 .version-tag { color: var(--muted); font-size: .72rem; font-variant-numeric: tabular-nums; }
+.copyright-link {
+  color: var(--muted);
+  font-size: .72rem;
+  text-decoration: none;
+}
+.copyright-link:visited, .copyright-link:hover, .copyright-link:active {
+  color: var(--muted);
+  text-decoration: none;
+}
 h1, h2, p { margin-top: 0; }
 h1 { font-size: 1.45rem; margin-bottom: 0; }
 a { color: var(--accent); }

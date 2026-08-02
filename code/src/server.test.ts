@@ -129,6 +129,20 @@ describe('hardened HTTP API and local smoke journey', () => {
     expect(html).toContain('<link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180">');
   });
 
+  it('shows a visually neutral repository copyright link below the version tag', async () => {
+    const document = await call('/', { headers: { host: 'kidcontrol.test' } });
+    const html = await document.text();
+    expect(html).toContain('<span id="version-tag"');
+    expect(html).toContain('<a class="copyright-link" href="https://github.com/tseiman/KidControl">© by Tseiman \'26</a>');
+    expect(html.indexOf('class="copyright-link"')).toBeGreaterThan(html.indexOf('id="version-tag"'));
+
+    const stylesheet = await call('/styles.css', { headers: { host: 'kidcontrol.test' } });
+    const css = await stylesheet.text();
+    expect(css).toMatch(/\.copyright-link[^}]*color:\s*var\(--muted\)/s);
+    expect(css).toMatch(/\.copyright-link[^}]*text-decoration:\s*none/s);
+    expect(css).toMatch(/\.copyright-link:visited,\s*\.copyright-link:hover,\s*\.copyright-link:active\s*{[^}]*color:\s*var\(--muted\)[^}]*text-decoration:\s*none/s);
+  });
+
   it('uses only a single validated client address supplied by the trusted proxy', async () => {
     const missing = await call('/api/login', {
       method: 'POST', headers: { host: 'kidcontrol.test', origin, 'content-type': 'application/json' },
