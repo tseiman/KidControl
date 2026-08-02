@@ -98,11 +98,16 @@ describe('hardened HTTP API and local smoke journey', () => {
     expect(await status.json()).toMatchObject({ devices: [{ id: 'tv', displayName: 'Family TV', power: 'unknown', acl: 'unknown' }] });
   });
 
-  it('serves the browser policy module used by the built application', async () => {
-    const response = await call('/ui-model.js', { headers: { host: 'kidcontrol.test' } });
-    expect(response.status).toBe(200);
-    expect(response.headers.get('content-type')).toBe('text/javascript; charset=utf-8');
-    expect(await response.text()).toContain('export function canStart');
+  it('serves the browser policy and localization modules used by the built application', async () => {
+    const policy = await call('/ui-model.js', { headers: { host: 'kidcontrol.test' } });
+    expect(policy.status).toBe(200);
+    expect(policy.headers.get('content-type')).toBe('text/javascript; charset=utf-8');
+    expect(await policy.text()).toContain('export function canStart');
+
+    const localization = await call('/i18n.js', { headers: { host: 'kidcontrol.test' } });
+    expect(localization.status).toBe(200);
+    expect(localization.headers.get('content-type')).toBe('text/javascript; charset=utf-8');
+    expect(await localization.text()).toContain('export function resolveLocale');
   });
 
   it('uses only a single validated client address supplied by the trusted proxy', async () => {

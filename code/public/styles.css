@@ -25,6 +25,8 @@ header {
   padding: 1.2rem max(1rem, calc((100vw - 720px) / 2));
   border-bottom: 1px solid var(--line);
 }
+.header-links { display: grid; justify-items: end; gap: .15rem; }
+.version-tag { color: var(--muted); font-size: .72rem; font-variant-numeric: tabular-nums; }
 h1, h2, p { margin-top: 0; }
 h1 { font-size: 1.45rem; margin-bottom: 0; }
 a { color: var(--accent); }

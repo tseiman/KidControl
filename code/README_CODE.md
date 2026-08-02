@@ -13,7 +13,7 @@ This directory contains the production TypeScript service, automated tests, and 
 - `src/server.ts` — framework-light `node:http` API and static WebUI
 - `src/runtime.ts` — deployment environment validation
 - `src/main.ts` — production wiring and graceful shutdown
-- `public/` — dependency-free smartphone WebUI with profile tiles, safe icon fallbacks, and an accessible superuser picker
+- `public/` — dependency-free smartphone WebUI with profile tiles, safe icon fallbacks, an accessible superuser picker, and client-side English/German localization
 
 The policy engine serializes all local mutations and reconciliation work through one queue. External network calls never run inside a SQLite transaction.
 
@@ -80,6 +80,8 @@ See [`../config/config.example.json`](../config/config.example.json). Important 
 - each optional user `icon` is a simple PNG, JPEG, or WebP filename served from `/etc/kidcontrol/icons` through the user-ID-based icon endpoint.
 
 Regular users can create a claim only while the latest authoritative Apple TV power state is `on`. The WebUI mirrors this rule with a disabled Start button and the serialized core enforces it against direct API calls. Superusers may create claims while power is `off` or `unknown`.
+
+The WebUI selects the first supported entry from `navigator.languages` (`en` or `de`) and falls back to English. Translation is entirely client-side; the server only serves the static `i18n.js` module. During `npm run build`, the same Git revision used by the startup banner is injected into the version tag below the documentation link.
 
 ## Apple TV pairing
 

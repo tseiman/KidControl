@@ -1,12 +1,24 @@
 import { canStart, initials } from './ui-model.js';
+import { applyTranslations, resolveLocale, translate } from './i18n.js';
 
 const byId = (id) => document.getElementById(id);
+const locale = resolveLocale(navigator.languages?.length ? navigator.languages : [navigator.language]);
+const t = (key, values) => translate(locale, key, values);
 let csrf = '';
 let state = null;
 let lastSync = Date.now();
 let publicUsers = [];
 let selectedLoginUserId = '';
 let adminUsers = [];
+
+applyTranslations(document, locale);
+byId('version-tag').textContent = t('version.label', { version: byId('version-tag').dataset.version });
+
+function localizedError(value) {
+  const key = `error.${value}`;
+  const translated = t(key);
+  return translated === key ? value : translated;
+}
 
 function format(seconds) {
   const safe = Math.max(0, Math.floor(seconds));
@@ -81,7 +93,10 @@ function renderLoginUsers(users) {
 function statusLine(device) {
   const line = document.createElement('p');
   line.className = 'device-status';
-  line.textContent = `Power: ${device.power} · Network: ${device.acl}`;
+  line.textContent = t('device.status', {
+    power: t(`power.${device.power}`),
+    network: t(`network.${device.acl}`)
+  });
   return line;
 }
 
@@ -94,7 +109,7 @@ function pickerUserRow(user) {
   const name = document.createElement('strong');
   name.textContent = user.displayName;
   const remaining = document.createElement('span');
-  remaining.textContent = `${format(user.remainingSeconds)} remaining`;
+  remaining.textContent = t('picker.remaining', { time: format(user.remainingSeconds) });
   copy.append(name, remaining);
   row.append(copy);
   return row;
@@ -109,7 +124,7 @@ function closeTargetPicker(focusTrigger = false) {
 function selectTarget(userId, focusTrigger = false, closePicker = true) {
   const user = adminUsers.find((candidate) => candidate.id === userId) ?? adminUsers[0];
   byId('target').value = user?.id ?? '';
-  byId('target-trigger').replaceChildren(user ? pickerUserRow(user) : document.createTextNode('No regular users'));
+  byId('target-trigger').replaceChildren(user ? pickerUserRow(user) : document.createTextNode(t('picker.noUsers')));
   byId('target-trigger').disabled = !user;
   byId('adjust-submit').disabled = !user;
   for (const option of byId('target-options').querySelectorAll('[role="option"]')) {
@@ -157,7 +172,7 @@ async function refresh() {
   lastSync = Date.now();
   byId('login').hidden = true;
   byId('dashboard').hidden = false;
-  byId('remaining').textContent = state.unlimited ? 'Unlimited' : format(state.remainingSeconds);
+  byId('remaining').textContent = state.unlimited ? t('dashboard.unlimited') : format(state.remainingSeconds);
   byId('devices').replaceChildren(...state.devices.map((device) => {
     const card = document.createElement('article');
     const active = device.id === state.activeDeviceId;
@@ -167,7 +182,7 @@ async function refresh() {
     title.textContent = device.displayName;
     details.append(title, statusLine(device));
     const button = document.createElement('button');
-    button.textContent = active ? 'Active' : 'Start';
+    button.textContent = active ? t('device.active') : t('device.start');
     button.disabled = !canStart(state.me.role, device.power, active);
     button.onclick = () => mutate('/api/claim', { deviceId: device.id });
     card.append(details, button);
@@ -181,14 +196,15 @@ async function refresh() {
 async function mutate(path, value = {}) {
   try {
     await api(path, { method: 'POST', body: JSON.stringify(value) });
-    note('State updated.');
+    note(t('status.updated'));
     await refresh();
   } catch (error) {
     if (error.message === 'Apple TV is not on') {
+      // Power can change after rendering; refresh silently so the disabled button reflects authoritative state.
       await refresh().catch(() => undefined);
       return;
     }
-    note(error.message, true);
+    note(localizedError(error.message), true);
   }
 }
 
@@ -203,7 +219,7 @@ byId('login-form').onsubmit = async (event) => {
     csrf = result.csrf;
     byId('pin').value = '';
     await refresh();
-  } catch (error) { note(error.message, true); }
+  } catch (error) { note(localizedError(error.message), true); }
 };
 byId('stop').onclick = () => mutate('/api/stop');
 byId('restore').onclick = () => mutate('/api/admin/restore');
@@ -212,8 +228,8 @@ byId('logout').onclick = async () => {
     await api('/api/logout', { method: 'POST', body: '{}' });
     csrf = ''; state = null;
     byId('dashboard').hidden = true; byId('login').hidden = false;
-    note('Signed out.');
-  } catch (error) { note(error.message, true); }
+    note(t('status.signedOut'));
+  } catch (error) { note(localizedError(error.message), true); }
 };
 byId('adjust').onsubmit = (event) => {
   event.preventDefault();
@@ -253,7 +269,7 @@ setInterval(() => {
   }
 }, 1000);
 setInterval(() => {
-  if (state) void refresh().catch((error) => note(error.message, true));
+  if (state) void refresh().catch((error) => note(localizedError(error.message), true));
 }, 10_000);
 
 (async () => {

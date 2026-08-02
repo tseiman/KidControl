@@ -10,44 +10,47 @@
 <body>
   <header>
     <div>
-      <span class="eyebrow">HOME ACCESS</span>
+      <span class="eyebrow" data-i18n="app.eyebrow">HOME ACCESS</span>
       <h1>KidControl</h1>
     </div>
-    <a href="/docs">Documentation</a>
+    <div class="header-links">
+      <a href="/docs" data-i18n="nav.documentation">Documentation</a>
+      <span id="version-tag" class="version-tag" data-version="__KIDCONTROL_VERSION__">Version __KIDCONTROL_VERSION__</span>
+    </div>
   </header>
   <main>
     <p id="message" role="status" aria-live="polite"></p>
 
     <section id="login" class="panel login-panel">
-      <h2>Sign in</h2>
-      <p>Choose your profile and enter your four-digit PIN.</p>
+      <h2 data-i18n="login.title">Sign in</h2>
+      <p data-i18n="login.intro">Choose your profile and enter your four-digit PIN.</p>
       <form id="login-form">
         <fieldset class="profile-fieldset">
-          <legend>Profile</legend>
-          <div id="user-grid" class="user-grid" role="group" aria-label="Choose a profile"></div>
+          <legend data-i18n="login.profile">Profile</legend>
+          <div id="user-grid" class="user-grid" role="group" aria-label="Choose a profile" data-i18n-aria-label="login.chooseProfile"></div>
         </fieldset>
         <input id="user" type="hidden">
-        <label>PIN<input id="pin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="current-password" required></label>
-        <button id="login-submit" disabled>Sign in</button>
+        <label><span data-i18n="login.pin">PIN</span><input id="pin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="current-password" required></label>
+        <button id="login-submit" data-i18n="login.submit" disabled>Sign in</button>
       </form>
     </section>
 
     <section id="dashboard" hidden>
       <div class="summary panel">
         <div>
-          <span class="eyebrow">TIME REMAINING</span>
+          <span class="eyebrow" data-i18n="dashboard.remaining">TIME REMAINING</span>
           <strong id="remaining">--:--:--</strong>
         </div>
-        <button id="logout" class="secondary">Log out</button>
+        <button id="logout" class="secondary" data-i18n="dashboard.logout">Log out</button>
       </div>
       <div id="devices" class="devices"></div>
-      <button id="stop" class="danger wide">Stop my session</button>
+      <button id="stop" class="danger wide" data-i18n="dashboard.stop">Stop my session</button>
 
       <section id="admin" class="panel" hidden>
-        <h2>Superuser controls</h2>
+        <h2 data-i18n="admin.title">Superuser controls</h2>
         <form id="adjust">
           <div class="picker-field">
-            <span id="target-label" class="field-label">User</span>
+            <span id="target-label" class="field-label" data-i18n="admin.user">User</span>
             <div id="target-picker" class="user-picker">
               <button id="target-trigger" class="user-picker-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="target-label target-trigger"></button>
               <div id="target-options" class="user-picker-options" role="listbox" aria-labelledby="target-label" hidden></div>
@@ -55,12 +58,12 @@
             <input id="target" type="hidden">
           </div>
           <div class="time-pickers">
-            <label>Hours<select id="hours"></select></label>
-            <label>Minutes<select id="minutes"></select></label>
+            <label><span data-i18n="admin.hours">Hours</span><select id="hours"></select></label>
+            <label><span data-i18n="admin.minutes">Minutes</span><select id="minutes"></select></label>
           </div>
-          <button id="adjust-submit">Set remaining time</button>
+          <button id="adjust-submit" data-i18n="admin.setRemaining">Set remaining time</button>
         </form>
-        <button id="restore" class="secondary wide">Restore KidControl state</button>
+        <button id="restore" class="secondary wide" data-i18n="admin.restore">Restore KidControl state</button>
       </section>
     </section>
   </main>
