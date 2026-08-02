@@ -3,7 +3,7 @@
 ## System requirements summary
 
 - **Recommended VM:** 1 vCPU, 512 MiB RAM, 1 GiB free disk
-- **Measured service footprint:** about 80 MiB idle RSS, effectively 0% idle CPU, 224 KiB built application, about 180 KiB initial SQLite state
+- **Measured service footprint:** about 80 MiB idle RSS, effectively 0% idle CPU, 1.5 MiB built application including WebUI icons, about 180 KiB initial SQLite state
 - **Software:** x86-64 Debian 12/13, Node.js `>=22.12.0`, npm, Git, systemd, and an HTTPS reverse proxy
 - **External requirements:** UniFi Network Integration API, one uniquely named blocking ACL per Apple TV, and paired Companion credentials
 
@@ -13,7 +13,7 @@ KidControl provides time-budgeted network access for wired Apple TVs. Users auth
 
 ## Status
 
-The TypeScript initial release includes:
+The production TypeScript implementation includes:
 
 - per-second accounting in `Europe/Berlin`, including midnight, DST, and restart recovery;
 - shared-device claims, daily budgets, and unlimited superusers;
@@ -21,7 +21,10 @@ The TypeScript initial release includes:
 - Companion `on` / `off` / `unknown` monitoring and reconnects;
 - SQLite persistence;
 - secure cookie authentication, CSRF protection, and login throttling;
-- a dependency-free mobile WebUI;
+- a dependency-free mobile WebUI with profile tiles, optional user avatars, and safe initials as fallback;
+- client-side English/German localization selected from browser preferences, with English as the default;
+- regular-user starts only while Apple TV power is confirmed `on`, plus superuser override for `off` and `unknown`;
+- a visible build revision, browser favicon, and Apple home-screen icon;
 - a hardened systemd unit.
 
 Automated tests use fake external adapters and never contact live UniFi or Apple TV systems. Production deployment still requires an end-to-end test with every configured ACL and Apple TV.
@@ -105,6 +108,25 @@ openssl rand -hex 32
 ```
 
 Do not commit or share the resulting pepper, UniFi API key, PINs, cookie tokens, or Companion credentials.
+
+#### Optional user avatars
+
+Each regular user or superuser can have an optional portrait in the login tile grid. The superuser target picker additionally shows portraits for its regular-user targets. Add a simple filename to that user's object in `/etc/kidcontrol/config.json`:
+
+```json
+{
+  "icon": "anna.webp"
+}
+```
+
+Store the corresponding file outside Git under `/etc/kidcontrol/icons`:
+
+```bash
+sudo install -d -o root -g kidcontrol -m 0750 /etc/kidcontrol/icons
+sudo install -o root -g kidcontrol -m 0640 /path/to/anna.webp /etc/kidcontrol/icons/anna.webp
+```
+
+Accepted filename extensions are `.png`, `.jpg`, `.jpeg`, and `.webp`, and each file may be up to 5 MiB. The value must be a plain filename beginning with a letter or digit; the remaining base-name characters may be letters, digits, dots, underscores, or hyphens. Directory separators, leading dots, SVG extensions, and symlinks are rejected. Administrators must ensure that the file content matches its extension. KidControl serves the image only through the public, unauthenticated `/api/user-icons/<user-id>` route because portraits are required on the login screen. Rectangular images are center-cropped into a circle without modifying the source file; omitted or unreadable images fall back to safe initials. Restart KidControl after changing `config.json`. See the [configuration quick guide](config/README_CONFIGURATION.md#user-icons) for the full rules.
 
 #### Certificate files
 
@@ -209,12 +231,13 @@ sudo systemctl status --no-pager kidcontrol.service
 sudo journalctl -u kidcontrol.service -n 50 --no-pager
 ```
 
-Confirm that the journal contains `KidControl version` followed by the short revision just pulled. This proves that systemd started the newly built and installed application rather than an older `/opt/kidcontrol` copy.
+Confirm that the journal contains `KidControl version` followed by the short revision just pulled and that the same revision appears below the **Documentation** link in the WebUI. This proves that systemd and the browser loaded the newly built application rather than an older `/opt/kidcontrol` copy. If only the browser still shows old assets, perform a hard reload; favicons and Apple home-screen icons may remain cached separately.
 
-Do not replace `/etc/kidcontrol/config.json`, `/etc/kidcontrol/kidcontrol.env`, or `/etc/kidcontrol/.atv-credentials.json` during a normal update. Review new example files in Git manually if a release documents a configuration change.
+Do not replace `/etc/kidcontrol/config.json`, `/etc/kidcontrol/kidcontrol.env`, `/etc/kidcontrol/.atv-credentials.json`, `/etc/kidcontrol/icons`, or `/var/lib/kidcontrol/state.sqlite` during a normal update. Review new example files in Git manually if a release documents a configuration change.
 
 ## Safety semantics
 
+- A regular user can start only while the latest authoritative Apple TV state is exactly `on`; `off` and `unknown` disable Start and are rejected by the server. Superusers can deliberately override all three states.
 - Only confirmed Companion `Asleep → off` ends normal regular-user claims.
 - `on`, `unknown`, disconnects, and network errors never fabricate standby.
 - Wake does not start or resume a claim.

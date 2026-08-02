@@ -39,7 +39,7 @@ Run the compiled application with:
 npm start
 ```
 
-`npm run build` copies `public/` and `../docs/README_KIDCONTROL.md` into `dist/`.
+`npm run build` copies `public/` into `dist/public`, writes the embedded revision to `dist/version.txt`, and copies `../docs/README_KIDCONTROL.md` to `dist/documentation.md`.
 
 ## Environment
 
@@ -76,12 +76,14 @@ See [`../config/config.example.json`](../config/config.example.json). Important 
 - regular users define all seven weekday budgets from `0` through `1499` minutes;
 - superusers do not define a budget;
 - ACL rule names are unique and matched exactly;
-- every device has a Companion Apple TV identifier.
+- every device has a Companion Apple TV identifier;
 - each optional user `icon` is a simple PNG, JPEG, or WebP filename served from `/etc/kidcontrol/icons` through the user-ID-based icon endpoint.
 
 Regular users can create a claim only while the latest authoritative Apple TV power state is `on`. The WebUI mirrors this rule with a disabled Start button and the serialized core enforces it against direct API calls. Superusers may create claims while power is `off` or `unknown`.
 
-The WebUI selects the first supported entry from `navigator.languages` (`en` or `de`) and falls back to English. Translation is entirely client-side; the server only serves the static `i18n.js` module. During `npm run build`, the same Git revision used by the startup banner is injected into the version tag below the documentation link.
+The login view is a profile-tile grid rather than a native select. Optional user images are loaded before authentication through `/api/user-icons/<user-id>`; the server accepts only configured regular files beneath `/etc/kidcontrol/icons`, allowlists `.png`/`.jpg`/`.jpeg`/`.webp` filename extensions, enforces a 5 MiB limit, and rejects path components, leading dots, unsupported extensions, and symlinks. It assigns MIME type from the validated extension rather than decoding image content. Browser favicons and Apple touch icons are likewise public static assets. The UI displays center-cropped circular portraits and falls back to safe initials. The superuser target control is a keyboard- and ARIA-accessible custom picker for regular users that includes portrait, name, and remaining time. See the [configuration quick guide](../config/README_CONFIGURATION.md#user-icons) for installation and ownership.
+
+The WebUI selects the first supported entry from `navigator.languages` (`en` or `de`), uses `navigator.language` when that list is empty, and falls back to English when neither yields a supported language. Translation is entirely client-side; the server only serves the static `i18n.js` module. During `npm run build`, the same Git revision used by the startup banner is injected into the version tag below the documentation link.
 
 Browser branding assets also live in `public/`: `favicon.ico` contains the conventional 16–64 px favicon sizes, `icon.png` is the high-resolution PNG, and the opaque 180×180 `apple-touch-icon.png` is used when KidControl is added to an Apple home screen. The production static-file allowlist serves all three with explicit image MIME types.
 
@@ -111,6 +113,7 @@ Useful endpoints:
 
 - `GET /health` — `ok` or `degraded`, without secrets
 - `GET /api/public` — safe login choices
+- `GET /api/user-icons/<user-id>` — public pre-login portrait without exposing its filename or filesystem path
 - `POST /api/login`
 - `GET /api/session` — resume a cookie session and obtain a fresh CSRF token
 - `GET /api/status`

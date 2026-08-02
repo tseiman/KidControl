@@ -37,6 +37,16 @@ Superuser fields:
 
 ### User icons
 
+The login page displays all users as profile tiles. The accessible superuser target picker lists only regular users and displays their portraits. Configure an icon in either a regular-user or superuser object:
+
+```json
+{
+  "id": "anna",
+  "displayName": "Anna",
+  "icon": "anna.webp"
+}
+```
+
 Keep user images outside Git under `/etc/kidcontrol/icons`. There is intentionally no browser upload endpoint. Upload a source image to a temporary administrator-controlled location, then install it with a simple filename that matches `config.json`:
 
 ```bash
@@ -44,7 +54,7 @@ sudo install -d -o root -g kidcontrol -m 0750 /etc/kidcontrol/icons
 sudo install -o root -g kidcontrol -m 0640 /path/to/anna.webp /etc/kidcontrol/icons/anna.webp
 ```
 
-Supported extensions are `.png`, `.jpg`, `.jpeg`, and `.webp`; each file must be no larger than 5 MiB. Square and rectangular images are displayed as circular, center-cropped portraits using `object-fit: cover`. If `icon` is omitted, missing, or unreadable, the WebUI displays safe initials instead. Restart KidControl after changing `config.json`; replacing an image with the same filename may remain browser-cached for up to five minutes.
+Accepted filename extensions are `.png`, `.jpg`, `.jpeg`, and `.webp`; each file must be no larger than 5 MiB. A filename must begin with an ASCII letter or digit. Its base name may then contain up to 127 additional ASCII letters, digits, dots, underscores, or hyphens before the extension. Directory separators and leading dots are therefore rejected, while repeated dots inside a base name are allowed. Symlinks are rejected. KidControl determines the response MIME type from the validated extension and does not decode the image, so administrators must ensure that content matches the extension. The browser receives the public, unauthenticated `/api/user-icons/<user-id>` route rather than the filesystem path; this is necessary to render portraits before login. Square and rectangular images are displayed as circular, center-cropped portraits using `object-fit: cover`; KidControl does not alter the source image. If `icon` is omitted, missing, or unreadable, the WebUI displays safe initials instead. Restart KidControl after changing `config.json`; replacing an image with the same filename may remain browser-cached for up to five minutes.
 
 Device fields:
 

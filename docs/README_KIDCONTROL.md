@@ -6,23 +6,24 @@ KidControl manages daily usage budgets for multiple wired Apple TVs. Authenticat
 
 A budget can be split into any number of intervals and used across different Apple TVs. For example, a one-hour daily budget can be consumed in sessions of 5, 30, and 25 minutes on one or more devices. Usage is charged with one-second precision, and the remaining time is displayed as `hh:mm:ss`.
 
-The initial-release TypeScript implementation now exists under `code/`. Automated tests cover the policy engine, persistence, UniFi contract, Apple TV adapter behavior, authentication, HTTP API, and restart-sensitive regressions with fake external adapters. Production deployment still requires the live validation checklist in this document.
+The production TypeScript implementation exists under `code/`. Automated tests cover the policy engine, persistence, UniFi contract, Apple TV adapter behavior, authentication, HTTP API, WebUI behavior, and restart-sensitive regressions with fake external adapters. Production deployment still requires the live validation checklist in this document.
 
 ## 2. Defined Scope
 
 - initially approximately two, eventually up to ten managed devices;
-- internal LAN access only, with the planned FQDN `kidcontrol.tsei.mdn`;
+- internal LAN access only through the configured HTTPS `PUBLIC_ORIGIN`;
 - a lightweight Debian 12 or Debian 13 VM as the target system;
 - a WebUI designed primarily for smartphones;
-- username selection from a list and a four-digit PIN;
+- username selection from a profile-tile grid with optional portraits and a four-digit PIN;
 - authentication remains valid until the user logs out manually;
-- users, PINs, roles, weekly budgets, and device mappings stored in a configuration file;
+- users, optional icon filenames, PINs, roles, weekly budgets, and device mappings stored in a configuration file;
 - sessions, usage, time adjustments, and runtime state stored in a lightweight, Node.js-compatible SQLite database;
 - user administration exclusively through the configuration file, not through the WebUI;
-- superuser functions provided through the WebUI;
+- superuser functions provided through the WebUI with an accessible custom user picker;
+- client-side English/German localization selected from browser preferences, with English as the fallback;
 - operational logging to standard output/error and therefore to the systemd journal without a dedicated Node.js syslog library; additional log files remain optional.
 
-Clear-text PINs are a deliberate simplification for the internal network. The significantly more powerful UniFi API key must nevertheless never be stored in source code, user configuration, or Git.
+PINs are deliberately present in the protected mode-`0600` runtime configuration, but are never stored in the browser; login uses HTTPS and keyed server-side fingerprints. The significantly more powerful UniFi API key must never be stored in source code, user configuration, or Git.
 
 ## 3. UniFi Interface
 
@@ -39,7 +40,7 @@ The existing, successfully tested script uses the official local UniFi Network I
 
 KidControl must not create or delete the existing ACL structure. It only reads explicitly configured rules and changes their `enabled` field. Display names and ACL rules are mapped explicitly so that unrelated network rules never appear in the WebUI.
 
-Example of a preliminary device configuration:
+Minimal device-configuration excerpt:
 
 ```json
 {
@@ -96,7 +97,7 @@ A superuser:
 - has unlimited usage time;
 - can set a regular user's remaining time for the current day directly from `00:00` through `24:59`;
 - can therefore add, reduce, remove completely, or restore time;
-- preferably selects hours and minutes with animated scrolling controls;
+- selects the target user from a keyboard- and ARIA-accessible custom picker showing portrait, name, and remaining time;
 - can trigger a manual **Restore KidControl State** reset;
 - displaces regular sessions on the selected Apple TV.
 
@@ -145,6 +146,8 @@ An Apple TV can remain online from a network perspective while sleeping. Ping an
 
 Required behavior:
 
+- A regular user can start only while the latest authoritative state is exactly `on`; the WebUI disables Start for `off` and `unknown`, and the server enforces the same rule against direct requests.
+- A superuser may deliberately start while the state is `on`, `off`, or `unknown`.
 - Standby ends the affected regular sessions.
 - Usage up to that point is stored with one-second precision.
 - The ACL is enabled as soon as no other claim remains.
@@ -156,7 +159,7 @@ The adapter maps a confirmed Companion `Asleep` state to `off`; `Awake`, `Idle`,
 
 ## 7. Authentication and User Configuration
 
-Preliminary structure:
+Minimal user-configuration excerpt:
 
 ```json
 {
@@ -165,6 +168,7 @@ Preliminary structure:
     {
       "id": "user-1",
       "displayName": "User 1",
+      "icon": "user-1.webp",
       "pin": "1234",
       "role": "user",
       "weeklyBudgetMinutes": {
@@ -184,6 +188,14 @@ Preliminary structure:
 The example PIN is not a production credential. The implemented schema is represented by `config/config.example.json`; production configuration is stored outside Git with mode `0600` and service-user ownership.
 
 Authentication uses a 256-bit random, server-side revocable token. Only its SHA-256 digest is stored. The browser receives a long-lived `Secure`, `HttpOnly`, `SameSite=Strict`, `__Host-` cookie; PINs are never stored in the browser. A keyed HMAC fingerprint using an independent protected authentication pepper invalidates sessions after a PIN or role change, and removing a user invalidates their sessions. Login attempts are throttled independently by source and normalized user ID.
+
+### WebUI presentation and localization
+
+The login page renders one profile tile per configured user instead of a native dropdown. An optional `icon` is a plain filename with an allowlisted `.png`, `.jpg`, `.jpeg`, or `.webp` extension stored outside Git under `/etc/kidcontrol/icons`; files are served before authentication through `/api/user-icons/<user-id>`, limited to 5 MiB, and protected against paths, leading dots, unsupported extensions, and symlink access. MIME type is selected from the extension; image content is not decoded by KidControl. Portraits are center-cropped into circles, while omitted or failed images produce safe initials. The superuser target picker lists only regular users. There is intentionally no browser upload endpoint.
+
+The frontend chooses the first supported value from `navigator.languages`, or checks `navigator.language` when that list is empty. `de` and `de-*` select German; any supported English value selects English; and English is the fallback when neither browser source yields a supported language. Static labels, dynamic states, controls, accessibility text, and stable API errors are translated entirely in the browser; no server-side language session is used.
+
+The header displays the Git revision embedded by `npm run build` below the documentation link. Browser favicon, high-resolution PNG, and an opaque 180×180 Apple touch icon are shipped as static build assets.
 
 ## 8. Persistence and Restart
 
@@ -218,7 +230,7 @@ During normal operation, KidControl adopts an ACL change made outside the applic
 
 A superuser can deliberately apply the opposite direction with **Restore KidControl State**: KidControl evaluates valid local claims and policies and sets managed ACLs to the resulting desired state.
 
-## 10. Proposed Architecture
+## 10. Implemented Architecture
 
 ```mermaid
 flowchart LR
@@ -244,7 +256,7 @@ Node.js can write to stdout/stderr without a dedicated syslog dependency. A syst
 
 ## 11. Implemented Technical Decisions and Remaining Live Validation
 
-The initial release uses:
+The implementation uses:
 
 1. **Runtime:** TypeScript on Node.js `>=22.12.0`.
 2. **Persistence:** built-in `node:sqlite`, foreign keys, WAL, `synchronous=FULL`, a busy timeout, schema versioning, and restrictive file modes.
@@ -265,16 +277,17 @@ The reverse proxy is an explicit trust boundary: its address is configured as `T
 
 ## 12. Documentation in the WebUI
 
-The WebUI will render this file as HTML. The deployment process copies this source file into the documentation server's content directory; no documentation symlink is maintained inside the project.
+The WebUI renders this file as HTML. `npm run build` copies it to `dist/documentation.md`; no documentation symlink or runtime Markdown source outside the installed application is required.
 
-## 13. Initial-Release Acceptance Criteria
+## 13. Implemented Acceptance Criteria
 
-- Login through username selection and a four-digit PIN.
+- Login through profile-tile selection, optional safe user portraits or initials, and a four-digit PIN.
 - Long-lived authentication until logout.
 - Start, stop, and switch an Apple TV.
 - Per-second, cross-device budget accounting.
 - Seven daily defaults per user.
 - Automatic termination when standby is reliably detected.
+- Regular-user starts require confirmed `on`; superusers can override `off` and `unknown`.
 - Correct multi-user claims on the same device.
 - Immediate termination when remaining time reaches zero.
 - Superuser usage, time adjustments, displacement, and reset.
@@ -282,5 +295,6 @@ The WebUI will render this file as HTML. The deployment process copies this sour
 - Adoption and logging of external ACL changes.
 - No secrets in the repository.
 - Display of this documentation in the WebUI.
+- Client-side English/German localization with English fallback and a visible embedded build revision.
 
 The repository implementation and automated fake-adapter tests satisfy these software criteria. Production acceptance additionally requires the live validation steps in Section 11 and `code/README_CODE.md`.

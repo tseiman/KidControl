@@ -78,7 +78,7 @@ describe('hardened HTTP API and local smoke journey', () => {
     expect(limited.body).toEqual({ error: 'invalid credentials' });
   });
 
-  it('never leaks PINs and returns device power and ACL status without other regular claims', async () => {
+  it('serves configured login avatars without authentication and never leaks PINs', async () => {
     const publicResponse = await call('/api/public', { headers: { host: 'kidcontrol.test' } });
     const text = await publicResponse.text(); expect(text).not.toContain('1234');
     const publicBody = JSON.parse(text) as { users: Array<{ id: string; displayName: string; iconUrl?: string }> };
@@ -110,7 +110,7 @@ describe('hardened HTTP API and local smoke journey', () => {
     expect(await localization.text()).toContain('export function resolveLocale');
   });
 
-  it('serves browser and Apple icons with explicit image types', async () => {
+  it('serves browser and Apple icons without authentication and with explicit image types', async () => {
     for (const [path, contentType] of [
       ['/favicon.ico', 'image/x-icon'],
       ['/icon.png', 'image/png'],
