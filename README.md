@@ -1,4 +1,22 @@
-# KidControl
+# <img src="code/public/apple-touch-icon.png" alt="KidControl icon" width="36" height="36" align="top"> KidControl
+
+## Table of contents
+
+- [Documentation](#documentation)
+- [System requirements summary](#system-requirements-summary)
+- [Status](#status)
+- [Default installation](#default-installation)
+- [Updating KidControl](#updating-kidcontrol)
+- [Safety semantics](#safety-semantics)
+- [License](#license)
+
+## Documentation
+
+- [Detailed implementation and operations](code/README_CODE.md)
+- [Requirements and architecture](docs/README_KIDCONTROL.md)
+- [Configuration quick guide](config/README_CONFIGURATION.md)
+- [Example configuration](config/config.example.json)
+- [systemd service](etc/kidcontrol.service)
 
 ## System requirements summary
 
@@ -246,14 +264,6 @@ Do not replace `/etc/kidcontrol/config.json`, `/etc/kidcontrol/kidcontrol.env`, 
 - An external no-claim allowance remains the baseline until an explicit superuser restore.
 - A failed first unblock does not start billable usage.
 - Removing a device that may still be allowed or pending deliberately blocks startup until it is safely restored with the previous configuration.
-
-## Documentation
-
-- [Detailed implementation and operations](code/README_CODE.md)
-- [Requirements and architecture](docs/README_KIDCONTROL.md)
-- [Configuration quick guide](config/README_CONFIGURATION.md)
-- [Example configuration](config/config.example.json)
-- [systemd service](etc/kidcontrol.service)
 
 ## License
 
