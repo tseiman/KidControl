@@ -83,6 +83,8 @@ Regular users can create a claim only while the latest authoritative Apple TV po
 
 The WebUI selects the first supported entry from `navigator.languages` (`en` or `de`) and falls back to English. Translation is entirely client-side; the server only serves the static `i18n.js` module. During `npm run build`, the same Git revision used by the startup banner is injected into the version tag below the documentation link.
 
+Browser branding assets also live in `public/`: `favicon.ico` contains the conventional 16–64 px favicon sizes, `icon.png` is the high-resolution PNG, and the opaque 180×180 `apple-touch-icon.png` is used when KidControl is added to an Apple home screen. The production static-file allowlist serves all three with explicit image MIME types.
+
 ## Apple TV pairing
 
 Pairing is a mandatory installation step. Every physical Apple TV must be paired separately because Companion credentials are device-specific. With KidControl stopped, run this once per Apple TV after installing the production dependency:

@@ -110,6 +110,25 @@ describe('hardened HTTP API and local smoke journey', () => {
     expect(await localization.text()).toContain('export function resolveLocale');
   });
 
+  it('serves browser and Apple icons with explicit image types', async () => {
+    for (const [path, contentType] of [
+      ['/favicon.ico', 'image/x-icon'],
+      ['/icon.png', 'image/png'],
+      ['/apple-touch-icon.png', 'image/png']
+    ]) {
+      const response = await call(path, { headers: { host: 'kidcontrol.test' } });
+      expect(response.status, path).toBe(200);
+      expect(response.headers.get('content-type'), path).toBe(contentType);
+      expect((await response.arrayBuffer()).byteLength, path).toBeGreaterThan(0);
+    }
+
+    const document = await call('/', { headers: { host: 'kidcontrol.test' } });
+    const html = await document.text();
+    expect(html).toContain('<link rel="icon" href="/favicon.ico" sizes="any">');
+    expect(html).toContain('<link rel="icon" href="/icon.png" type="image/png" sizes="1254x1254">');
+    expect(html).toContain('<link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180">');
+  });
+
   it('uses only a single validated client address supplied by the trusted proxy', async () => {
     const missing = await call('/api/login', {
       method: 'POST', headers: { host: 'kidcontrol.test', origin, 'content-type': 'application/json' },
