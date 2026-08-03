@@ -218,7 +218,28 @@ The service binds to `127.0.0.1:8080` by default. Expose it only through the con
 
 ## Updating KidControl
 
-Run the update from the repository cloned during installation. The first status command must produce no output. If it lists local changes, resolve them before continuing; do not overwrite them with an update.
+Run the checked-in update script from the repository root as your normal checkout user. Do **not** run the script itself with `sudo`; it requests `sudo` only for the protected deployment steps.
+
+```bash
+cd ~/KidControl
+./update.sh
+```
+
+The script checks the clean `main` checkout, Node.js version, active service, protected configuration/state paths, and systemd unit. It then pulls with `--ff-only`, installs dependencies, runs all tests, builds, audits production dependencies, verifies the embedded revision, and prunes development dependencies before it stops the service.
+
+After confirmation, it replaces only `/opt/kidcontrol/code/dist` and `/opt/kidcontrol/code/node_modules`, installs the package files and systemd unit, restarts KidControl, and checks both the active service and matching journal/build revision. It does not modify `/etc/kidcontrol` or `/var/lib/kidcontrol`. If an install command fails after the stop, it attempts to start the service again.
+
+To skip only the final confirmation, use:
+
+```bash
+./update.sh --yes
+```
+
+All safety, build, test, and revision checks still run.
+
+### Manual update fallback
+
+The equivalent manual procedure remains available for recovery or diagnosis. The first status command must produce no output. If it lists local changes, resolve them before continuing; do not overwrite them with an update.
 
 ```bash
 cd ~/KidControl
