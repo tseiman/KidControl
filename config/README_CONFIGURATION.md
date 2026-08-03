@@ -171,7 +171,7 @@ Configuration is read at startup. Restart the service after a change:
 ```bash
 sudo systemctl restart kidcontrol.service
 sudo systemctl status --no-pager kidcontrol.service
-sudo journalctl -u kidcontrol.service -n 50 --no-pager
+sudo tail -n 50 /var/log/kidcontrol/kidcontrol.log /var/log/kidcontrol/kidcontrol_error.log
 ```
 
 A startup validation error names the invalid field. Fix the file rather than bypassing validation.
