@@ -9,6 +9,7 @@ import { RateLimitError, type Auth } from './auth.js';
 
 interface Options { publicDir: string | URL; iconDir: string; documentation: string; publicOrigin: string; trustedProxyIp: string; bodyLimitBytes?: number }
 const COOKIE = '__Host-kidcontrol';
+const logEvent = (event: string, fields: Record<string, unknown>) => console.info(JSON.stringify({ event, ...fields }));
 const securityHeaders = {
   'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer',
   'Content-Security-Policy': "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
@@ -103,7 +104,9 @@ export function createKidControlServer(config: Config, core: KidControl, auth: A
       }
       if (method === 'POST' && url.pathname === '/api/login') {
         const input = await body(req, bodyLimit);
-        const result = auth.login(String(input.userId ?? ''), String(input.pin ?? ''), clientSource(req, options.trustedProxyIp));
+        const clientIp = clientSource(req, options.trustedProxyIp);
+        const result = auth.login(String(input.userId ?? ''), String(input.pin ?? ''), clientIp);
+        logEvent('login', { userId: result.user.id, userName: result.user.displayName, clientIp });
         return send(res, 200, { csrf: result.csrf, user: userView(result.user) }, {
           'Cache-Control': 'no-store',
           'Set-Cookie': `${COOKIE}=${result.token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=315360000`
@@ -170,7 +173,7 @@ export function createKidControlServer(config: Config, core: KidControl, auth: A
       const authorizationError = /reserved by superuser|superuser required/.test(message);
       const clientError = /unknown|invalid|exhausted|required|00:00|too large/.test(message);
       const powerConflict = message === 'Apple TV is not on';
-      if (!clientError && !authorizationError && !powerConflict) console.error('request failed', message);
+      if (!clientError && !authorizationError && !powerConflict) console.error(JSON.stringify({ event: 'request-error', method: req.method ?? 'GET', path: req.url ?? '/', message }));
       const status = authorizationError ? 403 : powerConflict ? 409 : clientError ? (message.includes('too large') ? 413 : 400) : 500;
       send(res, status, { error: clientError || authorizationError || powerConflict ? message : 'internal server error' }, { 'Cache-Control': 'no-store' });
     }

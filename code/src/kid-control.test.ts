@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { Store } from './store.js';
 import { KidControl } from './kid-control.js';
 import type { Config } from './domain.js';
@@ -18,11 +18,11 @@ const config: Config = {
 };
 
 describe('claim, accounting and reconciliation policy', () => {
-  let now: Date; let store: Store; let acl: { setBlocked: ReturnType<typeof vi.fn> }; let app: KidControl;
+  let now: Date; let store: Store; let acl: { read: (deviceId: string) => Promise<boolean>; setBlocked: Mock<(deviceId: string, blocked: boolean) => Promise<void>> }; let app: KidControl;
   beforeEach(async () => {
     now = new Date('2026-07-31T12:00:00Z');
     store = new Store(':memory:');
-    acl = { setBlocked: vi.fn(async () => undefined) };
+    acl = { read: async () => false, setBlocked: vi.fn(async () => undefined) };
     app = new KidControl(config, store, acl, () => now);
     await app.powerChanged('one', 'on');
     await app.powerChanged('two', 'on');
@@ -35,6 +35,24 @@ describe('claim, accounting and reconciliation policy', () => {
     expect(app.status('a').remainingSeconds).toBe(55);
     expect(store.activeClaims()).toEqual([]);
     expect(acl.setBlocked.mock.calls).toEqual([['one', false], ['one', true]]);
+  });
+
+  it('logs daily budgets, quarter-hour progress, standby stops, and superuser changes', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    try {
+      await app.setRemaining('root', 'a', 1200);
+      await app.start('a', 'one');
+      await app.poll();
+      advance(900);
+      await app.poll();
+      await app.powerChanged('one', 'off');
+      await app.setRemaining('root', 'a', 30);
+      const events = info.mock.calls.map(([line]) => JSON.parse(String(line)) as Record<string, unknown>);
+      expect(events).toContainEqual(expect.objectContaining({ event: 'budget-change', reason: 'daily', userId: 'a', amountSeconds: 60 }));
+      expect(events).toContainEqual(expect.objectContaining({ event: 'session-progress', userId: 'a', deviceId: 'one' }));
+      expect(events).toContainEqual(expect.objectContaining({ event: 'session-stop', userId: 'a', deviceId: 'one', reason: 'apple-tv-off' }));
+      expect(events).toContainEqual(expect.objectContaining({ event: 'budget-change', reason: 'superuser', userId: 'a', authorId: 'root', remainingSeconds: 30 }));
+    } finally { info.mockRestore(); }
   });
 
   it('keeps a shared device allowed until its last claim ends', async () => {

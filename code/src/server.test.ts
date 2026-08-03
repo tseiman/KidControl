@@ -52,6 +52,21 @@ describe('hardened HTTP API and local smoke journey', () => {
     return { response, body, cookie: response.headers.get('set-cookie')?.split(';')[0] ?? '' };
   }
 
+  it('logs successful login with client IP and budget actions without credentials', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    try {
+      const session = await login();
+      await core.powerChanged('tv', 'on');
+      await call('/api/claim', { method: 'POST', headers: { ...headers, cookie: session.cookie, 'x-csrf-token': session.body.csrf, 'content-type': 'application/json' }, body: '{"deviceId":"tv"}' });
+      await call('/api/stop', { method: 'POST', headers: { ...headers, cookie: session.cookie, 'x-csrf-token': session.body.csrf, 'content-type': 'application/json' }, body: '{}' });
+      const events = info.mock.calls.map(([line]) => JSON.parse(String(line)) as Record<string, unknown>);
+      expect(events).toContainEqual(expect.objectContaining({ event: 'login', userId: 'kid', clientIp: '192.0.2.10' }));
+      expect(events).toContainEqual(expect.objectContaining({ event: 'session-start', userId: 'kid', deviceId: 'tv', remainingSeconds: 600 }));
+      expect(events).toContainEqual(expect.objectContaining({ event: 'session-stop', userId: 'kid', deviceId: 'tv', reason: 'manual', remainingSeconds: 600 }));
+      expect(info.mock.calls.flat().join(' ')).not.toContain('1234');
+    } finally { info.mockRestore(); }
+  });
+
   it('rejects every wrong Host and every POST with a non-exact Origin', async () => {
     expect((await call('/health', { headers: { host: 'evil.test' } })).status).toBe(400);
     expect((await call('/api/login', { method: 'POST', headers: { host: 'kidcontrol.test', origin: 'https://evil.test', 'content-type': 'application/json' }, body: '{}' })).status).toBe(403);

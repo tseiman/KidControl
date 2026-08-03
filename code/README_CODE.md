@@ -123,6 +123,23 @@ Useful endpoints:
 - `POST /api/admin/adjust`
 - `POST /api/admin/restore`
 
+## Journal logging
+
+KidControl writes one-line JSON events to stdout/stderr for systemd-journald:
+
+- `login` — user ID/name and validated client IP;
+- `session-start` — user, Apple TV, and remaining seconds;
+- `session-progress` — active user, Apple TV, and remaining seconds once per 15-minute interval;
+- `session-stop` — user, Apple TV, remaining seconds, and reason such as `manual`, `apple-tv-off`, or `budget-exhausted`;
+- `budget-change` — daily budget allocation or a superuser adjustment including amount, target, and author;
+- `request-error` and `acl-error` — unexpected request or UniFi ACL failures without credentials.
+
+PINs, cookies, CSRF values, API keys, and Apple TV credentials are never included. View only these structured events with:
+
+```bash
+sudo journalctl -u kidcontrol.service -o cat | grep '^{'
+```
+
 ## Accounting and recovery
 
 Times are persisted as integer epoch seconds and charged as half-open intervals. Ledger entries are split at Berlin midnight. If the service is unavailable while a claim exists, the interval is conservatively charged at recovery. Charging stops at the exact budget-exhaustion second, including across midnight and DST transitions.
