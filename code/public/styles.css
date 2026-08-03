@@ -55,12 +55,32 @@ main { max-width: 720px; margin: auto; padding: 1rem; }
   color: var(--accent);
   font-weight: 750;
 }
-.summary { display: flex; align-items: center; justify-content: space-between; }
-.summary strong {
+.summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1.25rem;
+}
+.summary-profile {
+  display: grid;
+  justify-items: center;
+  gap: .35rem;
+  min-width: 0;
+}
+.summary-profile > strong {
+  max-width: 8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: .9rem;
+}
+.summary-time { min-width: 0; }
+.summary-time > strong {
   display: block;
   font-variant-numeric: tabular-nums;
-  font-size: clamp(2rem, 10vw, 3.5rem);
+  font-size: clamp(2rem, 8vw, 3.5rem);
 }
+#logout { justify-self: end; margin-top: 0; }
 label, .field-label { display: block; color: var(--muted); font-weight: 650; margin: .8rem 0; }
 input, select, button {
   width: 100%;
@@ -152,6 +172,7 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 }
 .avatar-login { width: 76px; height: 76px; font-size: 1.45rem; }
 .avatar-picker { width: 46px; height: 46px; font-size: .9rem; }
+.avatar-summary { width: 64px; height: 64px; font-size: 1.1rem; }
 .avatar img {
   position: absolute;
   inset: 0;
@@ -239,9 +260,10 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 
 @media (max-width: 560px) {
   .user-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .summary { grid-template-columns: auto minmax(0, 1fr); gap: .75rem 1rem; }
+  #logout { grid-column: 1 / -1; justify-self: stretch; width: 100%; }
 }
 @media (max-width: 440px) {
   .device { grid-template-columns: 1fr; }
   .device button { width: 100%; }
-  .summary { align-items: flex-start; gap: .5rem; flex-direction: column; }
 }

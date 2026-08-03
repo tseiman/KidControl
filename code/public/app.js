@@ -172,6 +172,8 @@ async function refresh() {
   lastSync = Date.now();
   byId('login').hidden = true;
   byId('dashboard').hidden = false;
+  byId('summary-avatar').replaceChildren(avatar(state.me, 'avatar-summary'));
+  byId('summary-user-name').textContent = state.me.displayName;
   byId('remaining').textContent = state.unlimited ? t('dashboard.unlimited') : format(state.remainingSeconds);
   byId('devices').replaceChildren(...state.devices.map((device) => {
     const card = document.createElement('article');
