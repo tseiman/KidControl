@@ -1,12 +1,11 @@
 import { berlinDay, budgetFor, type Config, type UserConfig } from './domain.js';
 import { Store, type Claim } from './store.js';
-
+import { logOperationalError, logOperationalInfo } from './operational-log.js';
 export interface AclController {
   read(deviceId: string): Promise<boolean>;
   setBlocked(deviceId: string, blocked: boolean): Promise<void>;
 }
 export type Power = 'on' | 'off' | 'unknown';
-const logEvent = (event: string, fields: Record<string, unknown>) => console.info(JSON.stringify({ event, ...fields }));
 
 export class KidControl {
   private queue: Promise<void> = Promise.resolve();
@@ -57,13 +56,13 @@ export class KidControl {
     if (day !== this.lastBudgetDay) {
       this.lastBudgetDay = day;
       for (const user of this.config.users.filter((candidate) => candidate.role === 'user')) {
-        logEvent('budget-change', { reason: 'daily', userId: user.id, userName: user.displayName, amountSeconds: budgetFor(user, date, this.config.timezone), remainingSeconds: this.remainingAt(user, now) });
+        logOperationalInfo('budget-change', { reason: 'daily', userId: user.id, userName: user.displayName, amountSeconds: budgetFor(user, date, this.config.timezone), remainingSeconds: this.remainingAt(user, now) });
       }
     }
     const bucket = Math.floor(now / 900);
     if (bucket !== this.lastProgressBucket) {
       this.lastProgressBucket = bucket;
-      for (const claim of this.store.activeClaims()) logEvent('session-progress', { ...this.sessionFields(claim.userId, claim.deviceId), ...this.budgetFields(claim.userId) });
+      for (const claim of this.store.activeClaims()) logOperationalInfo('session-progress', { ...this.sessionFields(claim.userId, claim.deviceId), ...this.budgetFields(claim.userId) });
     }
   }
 
@@ -135,7 +134,7 @@ export class KidControl {
       if (!claim) return { exhausted: false, at: chargeEnd };
       if (chargeEnd < end || (user.role === 'user' && this.remainingAt(user, chargeEnd) === 0)) {
         this.store.end(userId, 'budget-exhausted', chargeEnd);
-        logEvent('session-stop', { ...this.sessionFields(userId, claim.deviceId), reason: 'budget-exhausted', remainingSeconds: 0 });
+        logOperationalInfo('session-stop', { ...this.sessionFields(userId, claim.deviceId), reason: 'budget-exhausted', remainingSeconds: 0 });
         return { exhausted: true, at: chargeEnd };
       }
       if (chargeEnd <= segmentStart && chargeEnd < until) throw new Error('accounting made no progress');
@@ -222,7 +221,7 @@ export class KidControl {
         throw error;
       }
     }
-    logEvent('session-start', { ...this.sessionFields(userId, deviceId), ...this.budgetFields(userId) });
+    logOperationalInfo('session-start', { ...this.sessionFields(userId, deviceId), ...this.budgetFields(userId) });
   }
 
   stop(userId: string): Promise<void> { return this.enqueue(() => this.stopInternal(userId, 'user-stop')); }
@@ -235,7 +234,7 @@ export class KidControl {
       return;
     }
     this.store.end(userId, reason, this.now());
-    logEvent('session-stop', { ...this.sessionFields(userId, claim.deviceId), reason: reason === 'user-stop' ? 'manual' : reason, ...this.budgetFields(userId) });
+    logOperationalInfo('session-stop', { ...this.sessionFields(userId, claim.deviceId), reason: reason === 'user-stop' ? 'manual' : reason, ...this.budgetFields(userId) });
     try { await this.reconcileInternal(claim.deviceId); } catch { /* durable pending */ }
   }
 
@@ -265,7 +264,7 @@ export class KidControl {
     for (const claim of regular) this.chargeInternal(claim.userId);
     const standby = regular.filter((claim) => this.store.claim(claim.userId));
     this.store.endMany(standby.map((claim) => claim.userId), 'standby', this.now());
-    for (const claim of standby) logEvent('session-stop', { ...this.sessionFields(claim.userId, claim.deviceId), reason: 'apple-tv-off', ...this.budgetFields(claim.userId) });
+    for (const claim of standby) logOperationalInfo('session-stop', { ...this.sessionFields(claim.userId, claim.deviceId), reason: 'apple-tv-off', ...this.budgetFields(claim.userId) });
     try { await this.reconcileInternal(deviceId); } catch { /* pending */ }
   }
 
@@ -279,7 +278,7 @@ export class KidControl {
       this.chargeInternal(userId);
       const delta = seconds - this.remainingAt(target, this.now());
       this.store.addAdjustment(userId, berlinDay(this.clock(), this.config.timezone), delta, authorId, this.now());
-      logEvent('budget-change', { reason: 'superuser', userId, userName: target.displayName, authorId, authorName: this.user(authorId).displayName, amountSeconds: delta, remainingSeconds: seconds });
+      logOperationalInfo('budget-change', { reason: 'superuser', userId, userName: target.displayName, authorId, authorName: this.user(authorId).displayName, amountSeconds: delta, remainingSeconds: seconds });
       if (seconds === 0 && this.store.claim(userId)) await this.stopInternal(userId, 'adjustment-exhausted');
       else if (priorClaim && !this.store.claim(userId)) {
         try { await this.reconcileInternal(priorClaim.deviceId); } catch { /* durable pending */ }
@@ -383,7 +382,7 @@ export class KidControl {
       } catch (error) {
         const state = this.store.aclState(device.id);
         const message = (error instanceof Error ? error.message : 'ACL unavailable').slice(0, 500);
-        if (state?.lastError !== message) console.error(JSON.stringify({ event: 'acl-error', deviceId: device.id, deviceName: device.displayName, message }));
+        if (state?.lastError !== message) logOperationalError('acl-error', { deviceId: device.id, deviceName: device.displayName, message });
         this.store.setAcl({
           deviceId: device.id, desiredBlocked: state?.desiredBlocked ?? true, actualBlocked: null,
           baselineBlocked: state?.baselineBlocked ?? true, source: state?.source ?? 'baseline', pending: state?.pending ?? false,

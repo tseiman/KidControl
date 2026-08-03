@@ -123,9 +123,9 @@ Useful endpoints:
 - `POST /api/admin/adjust`
 - `POST /api/admin/restore`
 
-## Journal logging
+## Service logging
 
-KidControl writes one-line JSON events to stdout/stderr for systemd-journald:
+The example systemd unit appends application stdout to `/var/log/kidcontrol/kidcontrol.log` and stderr to `/var/log/kidcontrol/kidcontrol_error.log`. KidControl writes single-line `key=value` operational events to these streams. String values are quoted and safely escape quotes, backslashes, and line breaks:
 
 - `login` — user ID/name and validated client IP;
 - `session-start` — user, Apple TV, and remaining seconds;
@@ -134,11 +134,15 @@ KidControl writes one-line JSON events to stdout/stderr for systemd-journald:
 - `budget-change` — daily budget allocation or a superuser adjustment including amount, target, and author;
 - `request-error` and `acl-error` — unexpected request or UniFi ACL failures without credentials.
 
-PINs, cookies, CSRF values, API keys, and Apple TV credentials are never included. View only these structured events with:
+PINs, cookies, CSRF values, API keys, and Apple TV credentials are never included. The example unit uses `LogsDirectory=kidcontrol` and `LogsDirectoryMode=0750`; systemd therefore creates `/var/log/kidcontrol` as `kidcontrol:kidcontrol` when needed. `UMask=0077` protects newly created log files. Follow them with:
 
 ```bash
-sudo journalctl -u kidcontrol.service -o cat | grep '^{'
+sudo tail -F /var/log/kidcontrol/kidcontrol.log /var/log/kidcontrol/kidcontrol_error.log
 ```
+
+For example, filter session stops with `grep 'event=session-stop' /var/log/kidcontrol/kidcontrol.log`.
+
+systemd manager messages remain available through `sudo journalctl -u kidcontrol.service` but no longer contain normal application stdout/stderr when the example unit is installed.
 
 ## Accounting and recovery
 

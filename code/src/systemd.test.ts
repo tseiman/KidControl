@@ -8,4 +8,11 @@ describe('systemd network sandbox', () => {
     const restriction = unit.split('\n').find((line) => line.startsWith('RestrictAddressFamilies='));
     expect(restriction?.split(/\s+/)).toContain('AF_NETLINK');
   });
+
+  it('creates the private log directory and appends stdout and stderr to separate files', () => {
+    expect(unit).toContain('LogsDirectory=kidcontrol');
+    expect(unit).toContain('LogsDirectoryMode=0750');
+    expect(unit).toContain('StandardOutput=append:/var/log/kidcontrol/kidcontrol.log');
+    expect(unit).toContain('StandardError=append:/var/log/kidcontrol/kidcontrol_error.log');
+  });
 });

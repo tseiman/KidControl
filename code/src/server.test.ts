@@ -59,11 +59,11 @@ describe('hardened HTTP API and local smoke journey', () => {
       await core.powerChanged('tv', 'on');
       await call('/api/claim', { method: 'POST', headers: { ...headers, cookie: session.cookie, 'x-csrf-token': session.body.csrf, 'content-type': 'application/json' }, body: '{"deviceId":"tv"}' });
       await call('/api/stop', { method: 'POST', headers: { ...headers, cookie: session.cookie, 'x-csrf-token': session.body.csrf, 'content-type': 'application/json' }, body: '{}' });
-      const events = info.mock.calls.map(([line]) => JSON.parse(String(line)) as Record<string, unknown>);
-      expect(events).toContainEqual(expect.objectContaining({ event: 'login', userId: 'kid', clientIp: '192.0.2.10' }));
-      expect(events).toContainEqual(expect.objectContaining({ event: 'session-start', userId: 'kid', deviceId: 'tv', remainingSeconds: 600 }));
-      expect(events).toContainEqual(expect.objectContaining({ event: 'session-stop', userId: 'kid', deviceId: 'tv', reason: 'manual', remainingSeconds: 600 }));
-      expect(info.mock.calls.flat().join(' ')).not.toContain('1234');
+      const lines = info.mock.calls.map(([line]) => String(line));
+      expect(lines).toContain('event=login userId="kid" userName="Kid" clientIp="192.0.2.10"');
+      expect(lines).toContain('event=session-start userId="kid" userName="Kid" deviceId="tv" deviceName="Family TV" unlimited=false remainingSeconds=600');
+      expect(lines).toContain('event=session-stop userId="kid" userName="Kid" deviceId="tv" deviceName="Family TV" reason="manual" unlimited=false remainingSeconds=600');
+      expect(lines.join(' ')).not.toContain('1234');
     } finally { info.mockRestore(); }
   });
 

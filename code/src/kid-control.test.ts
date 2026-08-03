@@ -47,11 +47,11 @@ describe('claim, accounting and reconciliation policy', () => {
       await app.poll();
       await app.powerChanged('one', 'off');
       await app.setRemaining('root', 'a', 30);
-      const events = info.mock.calls.map(([line]) => JSON.parse(String(line)) as Record<string, unknown>);
-      expect(events).toContainEqual(expect.objectContaining({ event: 'budget-change', reason: 'daily', userId: 'a', amountSeconds: 60 }));
-      expect(events).toContainEqual(expect.objectContaining({ event: 'session-progress', userId: 'a', deviceId: 'one' }));
-      expect(events).toContainEqual(expect.objectContaining({ event: 'session-stop', userId: 'a', deviceId: 'one', reason: 'apple-tv-off' }));
-      expect(events).toContainEqual(expect.objectContaining({ event: 'budget-change', reason: 'superuser', userId: 'a', authorId: 'root', remainingSeconds: 30 }));
+      const lines = info.mock.calls.map(([line]) => String(line));
+      expect(lines.some((line) => line.startsWith('event=budget-change ') && line.includes('reason="daily"') && line.includes('userId="a"') && line.includes('amountSeconds=60'))).toBe(true);
+      expect(lines.some((line) => line.startsWith('event=session-progress ') && line.includes('userId="a"') && line.includes('deviceId="one"'))).toBe(true);
+      expect(lines.some((line) => line.startsWith('event=session-stop ') && line.includes('userId="a"') && line.includes('deviceId="one"') && line.includes('reason="apple-tv-off"'))).toBe(true);
+      expect(lines.some((line) => line.startsWith('event=budget-change ') && line.includes('reason="superuser"') && line.includes('userId="a"') && line.includes('authorId="root"') && line.includes('remainingSeconds=30'))).toBe(true);
     } finally { info.mockRestore(); }
   });
 

@@ -6,6 +6,7 @@ SERVICE="kidcontrol.service"
 INSTALL_ROOT="/opt/kidcontrol/code"
 UNIT_SOURCE="etc/kidcontrol.service"
 UNIT_TARGET="/etc/systemd/system/kidcontrol.service"
+LOG_FILE=/var/log/kidcontrol/kidcontrol.log
 ASSUME_YES=0
 SERVICE_STOPPED=0
 UPDATE_OK=0
@@ -42,7 +43,7 @@ restart_after_failure() {
 }
 trap restart_after_failure EXIT
 
-for command in git node npm sudo systemctl systemd-analyze journalctl; do
+for command in git node npm sudo systemctl systemd-analyze journalctl awk tail; do
   command -v "$command" >/dev/null 2>&1 || die "Required command not found: $command"
 done
 
@@ -112,6 +113,11 @@ fi
 log "Installing $REVISION"
 sudo systemctl stop "$SERVICE"
 SERVICE_STOPPED=1
+if sudo test -f "$LOG_FILE"; then
+  LOG_LINES_BEFORE_START=$(sudo awk 'END { print NR }' "$LOG_FILE")
+else
+  LOG_LINES_BEFORE_START=0
+fi
 sudo rm -rf -- "$INSTALL_ROOT/dist" "$INSTALL_ROOT/node_modules"
 sudo cp -a code/dist code/node_modules code/package.json code/package-lock.json "$INSTALL_ROOT/"
 sudo chown -R root:root /opt/kidcontrol
@@ -125,8 +131,8 @@ INSTALLED_REVISION=$(tr -d '\r\n' < "$INSTALL_ROOT/dist/version.txt")
 STARTUP_OK=0
 for _attempt in {1..10}; do
   sleep 2
-  JOURNAL=$(sudo journalctl -u "$SERVICE" -n 100 --no-pager -o cat)
-  if sudo systemctl is-active --quiet "$SERVICE" && [[ "$JOURNAL" == *"KidControl version $REVISION"* ]]; then
+  NEW_LOG=$(sudo tail -n "+$((LOG_LINES_BEFORE_START + 1))" "$LOG_FILE" 2>/dev/null || true)
+  if sudo systemctl is-active --quiet "$SERVICE" && [[ "$NEW_LOG" == *"KidControl version $REVISION"* ]]; then
     STARTUP_OK=1
     break
   fi
@@ -138,3 +144,4 @@ UPDATE_OK=1
 log "Update completed successfully: $REVISION"
 sudo systemctl status --no-pager "$SERVICE"
 sudo journalctl -u "$SERVICE" -n 20 --no-pager
+sudo tail -n 20 /var/log/kidcontrol/kidcontrol.log /var/log/kidcontrol/kidcontrol_error.log
