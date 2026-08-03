@@ -42,10 +42,6 @@ restart_after_failure() {
 }
 trap restart_after_failure EXIT
 
-if (( EUID == 0 )); then
-  die "Run this script as the normal checkout user, not with sudo."
-fi
-
 for command in git node npm sudo systemctl systemd-analyze journalctl; do
   command -v "$command" >/dev/null 2>&1 || die "Required command not found: $command"
 done

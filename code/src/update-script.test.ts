@@ -23,7 +23,7 @@ describe('production update script', () => {
   });
 
   it('checks the checkout and production prerequisites', () => {
-    expect(script).toContain('EUID == 0');
+    expect(script).not.toContain('EUID == 0');
     expect(script).toContain('git status --porcelain');
     expect(script).toContain('git pull --ff-only');
     expect(script).toContain('Node.js >=22.12.0');

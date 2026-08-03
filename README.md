@@ -218,7 +218,7 @@ The service binds to `127.0.0.1:8080` by default. Expose it only through the con
 
 ## Updating KidControl
 
-Run the checked-in update script from the repository root as your normal checkout user. Do **not** run the script itself with `sudo`; it requests `sudo` only for the protected deployment steps.
+Run the checked-in update script from the repository root. It supports being run directly as `root`; on a multi-user installation it can also run as the checkout user and request `sudo` for protected deployment steps.
 
 ```bash
 cd ~/KidControl
