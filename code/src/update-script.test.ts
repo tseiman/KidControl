@@ -46,6 +46,12 @@ describe('production update script', () => {
     expect(revision).toBeLessThan(stop);
   });
 
+  it('waits for startup and retries the journal revision check ten times', () => {
+    expect(script).toContain('for _attempt in {1..10}');
+    expect(script).toContain('sleep 2');
+    expect(script).toContain('KidControl version $REVISION');
+  });
+
   it('limits replacement to generated code and verifies the restarted service', () => {
     expect(script).toContain('sudo rm -rf -- "$INSTALL_ROOT/dist" "$INSTALL_ROOT/node_modules"');
     expect(script).toContain('sudo cp -a code/dist code/node_modules code/package.json code/package-lock.json "$INSTALL_ROOT/"');

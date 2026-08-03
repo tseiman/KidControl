@@ -118,14 +118,21 @@ sudo chown -R root:root /opt/kidcontrol
 sudo install -o root -g root -m 0644 "$UNIT_SOURCE" "$UNIT_TARGET"
 sudo systemctl daemon-reload
 sudo systemctl start "$SERVICE"
-SERVICE_STOPPED=0
 
 log "Verifying the update"
-sudo systemctl is-active --quiet "$SERVICE" || die "$SERVICE did not become active."
 INSTALLED_REVISION=$(tr -d '\r\n' < "$INSTALL_ROOT/dist/version.txt")
 [[ "$INSTALLED_REVISION" == "$REVISION" ]] || die "Installed revision does not match $REVISION."
-JOURNAL=$(sudo journalctl -u "$SERVICE" -n 100 --no-pager -o cat)
-[[ "$JOURNAL" == *"KidControl version $REVISION"* ]] || die "Journal does not contain KidControl version $REVISION."
+STARTUP_OK=0
+for _attempt in {1..10}; do
+  sleep 2
+  JOURNAL=$(sudo journalctl -u "$SERVICE" -n 100 --no-pager -o cat)
+  if sudo systemctl is-active --quiet "$SERVICE" && [[ "$JOURNAL" == *"KidControl version $REVISION"* ]]; then
+    STARTUP_OK=1
+    break
+  fi
+done
+(( STARTUP_OK == 1 )) || die "Service did not become active with KidControl version $REVISION within 20 seconds."
+SERVICE_STOPPED=0
 
 UPDATE_OK=1
 log "Update completed successfully: $REVISION"
