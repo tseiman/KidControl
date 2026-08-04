@@ -150,7 +150,7 @@ Times are persisted as integer epoch seconds and charged as half-open intervals.
 
 SQLite enables foreign keys, a busy timeout, `synchronous=FULL`, and WAL for file-backed databases. The service applies umask `0077` and mode `0600` to database files.
 
-Do not remove a device from configuration while its persisted claim or ACL state may still be allowed or pending. Recovery deliberately refuses startup because the reduced configuration no longer contains enough trusted ACL identity to block that device. Restore the previous configuration, stop its claims, run **Restore KidControl State**, verify the ACL is blocked, and only then remove the device.
+Do not remove a device from configuration while its persisted claim or ACL state may still be allowed or pending. Recovery deliberately refuses startup because the reduced configuration no longer contains enough trusted ACL identity to block that device. Restore the previous configuration, stop its claims, run **Restore Network State**, verify the ACL is blocked, and only then remove the device.
 
 ## Live deployment checklist
 
@@ -163,7 +163,7 @@ Before production use:
 5. Verify `Asleep`, `Screensaver`, `Awake`, `Idle`, disconnect, and reconnect on each physical Apple TV.
 6. Confirm wake never starts a claim and network loss produces `unknown`.
 7. Confirm existing Apple TV audio output configuration is unchanged.
-8. Test restart recovery, an externally changed ACL, and **Restore KidControl State**.
+8. Test restart recovery, an externally changed ACL, and **Restore Network State**.
 9. Verify the TLS reverse proxy, cookie behavior, file ownership, and systemd sandbox.
    Install `/etc/kidcontrol/kidcontrol.env` as `root:root` mode `0600`; it contains the UniFi API key and authentication pepper.
 10. Back up and restore the SQLite state file while the service is stopped.

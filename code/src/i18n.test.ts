@@ -22,6 +22,8 @@ describe('client-side WebUI localization', () => {
       network: translate('de', 'network.blocked')
     })).toBe('Strom: Ein · Netzwerk: Gesperrt');
     expect(translate('de', 'picker.remaining', { time: '01:02:03' })).toBe('01:02:03 verbleibend');
+    expect(translate('en', 'admin.restore')).toBe('Restore network state');
+    expect(translate('de', 'admin.restore')).toBe('Netzwerkzustand wiederherstellen');
     expect(translate('en', 'network.degraded')).toBe('Degraded');
     expect(translate('de', 'network.degraded')).toBe('Eingeschränkt');
   });

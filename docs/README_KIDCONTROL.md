@@ -98,7 +98,7 @@ A superuser:
 - can set a regular user's remaining time for the current day directly from `00:00` through `24:59`;
 - can therefore add, reduce, remove completely, or restore time;
 - selects the target user from a keyboard- and ARIA-accessible custom picker showing portrait, name, and remaining time;
-- can trigger a manual **Restore KidControl State** reset;
+- can trigger a manual **Restore Network State** reset;
 - displaces regular sessions on the selected Apple TV.
 
 Displaced regular sessions are paused and are not resumed automatically. Once superuser usage ends, a regular user must press **Start** again.
@@ -228,7 +228,7 @@ During normal operation, KidControl adopts an ACL change made outside the applic
 - externally allowed without a claim: record an external allowance without charging any user's time;
 - the database then contains the newly documented state.
 
-A superuser can deliberately apply the opposite direction with **Restore KidControl State**: KidControl evaluates valid local claims and policies and sets managed ACLs to the resulting desired state.
+A superuser can deliberately apply the opposite direction with **Restore Network State**: KidControl evaluates valid local claims and policies and sets managed ACLs to the resulting desired state.
 
 ## 10. Implemented Architecture
 

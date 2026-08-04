@@ -63,7 +63,7 @@ Device fields:
 - `aclRuleName` — exact unique name of the existing blocking UniFi ACL
 - `appleTvIdentifier` — exact case-sensitive top-level key written to the Companion credential map; it often looks like a MAC address but is not the display name and must not be guessed from a UniFi Ethernet or Wi-Fi address
 
-Do not remove a device while it may still be allowed or pending. Stop its claims, run **Restore KidControl State**, verify that its ACL is blocked, and then remove it.
+Do not remove a device while it may still be allowed or pending. Stop its claims, run **Restore Network State**, verify that its ACL is blocked, and then remove it.
 
 ## 2. Service environment
 
