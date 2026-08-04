@@ -12,6 +12,7 @@ import type { Config } from './domain.js';
 
 const config: Config = { timezone: 'Europe/Berlin', users: [
   { id: 'kid', displayName: 'Kid', icon: 'kid.webp', pin: '1234', role: 'user', weeklyBudgetMinutes: { monday: 10, tuesday: 10, wednesday: 10, thursday: 10, friday: 10, saturday: 10, sunday: 10 } },
+  { id: 'sibling', displayName: 'Sibling', pin: '5678', role: 'user', weeklyBudgetMinutes: { monday: 10, tuesday: 10, wednesday: 10, thursday: 10, friday: 10, saturday: 10, sunday: 10 } },
   { id: 'root', displayName: 'Root', pin: '9999', role: 'superuser' }
 ], devices: [{ id: 'tv', displayName: 'Family TV', aclRuleName: 'KC TV', appleTvIdentifier: 'atv' }] };
 const origin = 'https://kidcontrol.test';
@@ -177,16 +178,23 @@ describe('hardened HTTP API and local smoke journey', () => {
     expect(independent.response.status).toBe(200);
   });
 
-  it('returns seven-day usage history only to superusers for each regular user', async () => {
+  it('returns each regular user only their own history and superusers every regular user history', async () => {
     store.db.prepare('INSERT INTO usage_sessions(id,user_id,device_id,day,started_at,accounted_at,ended_at,end_reason,seconds) VALUES(?,?,?,?,?,?,?,?,?)')
       .run('history', 'kid', 'tv', '2026-07-30', 1, 3_601, 3_601, 'test', 3_600);
     store.db.prepare('INSERT INTO ledger(user_id,day,seconds,session_id,created_at) VALUES(?,?,?,?,?)')
       .run('kid', '2026-07-30', 3_600, 'history', 3_601);
+    store.db.prepare('INSERT INTO usage_sessions(id,user_id,device_id,day,started_at,accounted_at,ended_at,end_reason,seconds) VALUES(?,?,?,?,?,?,?,?,?)')
+      .run('sibling-history', 'sibling', 'tv', '2026-07-30', 1, 1_201, 1_201, 'test', 1_200);
+    store.db.prepare('INSERT INTO ledger(user_id,day,seconds,session_id,created_at) VALUES(?,?,?,?,?)')
+      .run('sibling', '2026-07-30', 1_200, 'sibling-history', 1_201);
 
     const root = await login('root', '9999');
     const adminStatus = await call('/api/status', { headers: { host: 'kidcontrol.test', cookie: root.cookie } });
     const adminBody = await adminStatus.json() as { users: Array<{ id: string; usageLast7Days: Array<{ day: string; seconds: number }> }> };
-    expect(adminBody.users[0]?.usageLast7Days).toEqual([
+    expect(adminBody).not.toHaveProperty('usageLast7Days');
+    const kidHistory = adminBody.users.find((user) => user.id === 'kid')?.usageLast7Days;
+    const siblingHistory = adminBody.users.find((user) => user.id === 'sibling')?.usageLast7Days;
+    expect(kidHistory).toEqual([
       { day: '2026-07-25', seconds: 0 },
       { day: '2026-07-26', seconds: 0 },
       { day: '2026-07-27', seconds: 0 },
@@ -195,10 +203,23 @@ describe('hardened HTTP API and local smoke journey', () => {
       { day: '2026-07-30', seconds: 3_600 },
       { day: '2026-07-31', seconds: 0 }
     ]);
+    expect(siblingHistory).toEqual(kidHistory?.map((entry) => (
+      entry.day === '2026-07-30' ? { ...entry, seconds: 1_200 } : entry
+    )));
 
     const kid = await login();
     const userStatus = await call('/api/status', { headers: { host: 'kidcontrol.test', cookie: kid.cookie } });
-    expect(await userStatus.json()).not.toHaveProperty('users');
+    const userBody = await userStatus.json() as { usageLast7Days: Array<{ day: string; seconds: number }> };
+    expect(userBody).not.toHaveProperty('users');
+    expect(userBody.usageLast7Days).toEqual(kidHistory);
+    expect(userBody.usageLast7Days).not.toEqual(siblingHistory);
+
+    const sibling = await login('sibling', '5678');
+    const siblingStatus = await call('/api/status', { headers: { host: 'kidcontrol.test', cookie: sibling.cookie } });
+    const siblingBody = await siblingStatus.json() as { usageLast7Days: Array<{ day: string; seconds: number }> };
+    expect(siblingBody).not.toHaveProperty('users');
+    expect(siblingBody.usageLast7Days).toEqual(siblingHistory);
+    expect(siblingBody.usageLast7Days).not.toEqual(kidHistory);
   });
 
   it('returns 403 when a regular user targets a device reserved by a superuser', async () => {

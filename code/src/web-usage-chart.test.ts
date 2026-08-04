@@ -30,7 +30,7 @@ describe('superuser seven-day usage chart', () => {
       [...elements.map((element) => html.indexOf(element))].sort((a, b) => a - b)
     );
     expect(html).toContain('aria-labelledby="usage-chart-title"');
-    expect(html).toContain('id="usage-detail" aria-live="polite" aria-atomic="true"');
+    expect(html).toContain('id="usage-detail" class="usage-detail" aria-live="polite" aria-atomic="true"');
   });
 
   it('re-renders safe localized bars whenever the selected user changes', () => {
@@ -55,7 +55,7 @@ describe('superuser seven-day usage chart', () => {
     expect(app).toContain("bar.addEventListener('keydown'");
     expect(app).toContain("event.key === 'ArrowLeft'");
     expect(app).toContain("event.key === 'ArrowRight'");
-    expect(app).toContain("const focusedUsageDay = byId('usage-bars').contains(document.activeElement)");
+    expect(app).toContain('const focusedUsageDay = barsElement.contains(document.activeElement)');
     expect(app).toContain('if (focusedUsageDay)');
     expect(app).toContain('.focus({ preventScroll: true })');
   });
@@ -71,5 +71,63 @@ describe('superuser seven-day usage chart', () => {
     expect(track.get('height')).toMatch(/^clamp\(/);
     expect(track.get('overflow')).toBe('hidden');
     expect(selected.get('border-color')).toBe('var(--accent)');
+  });
+});
+
+describe('regular-user seven-day usage chart', () => {
+  it('places a separate own-usage section below every device control and before the hidden admin section', () => {
+    const html = asset('index.html');
+    const elements = [
+      'id="devices"',
+      'id="stop"',
+      'id="own-usage-chart"',
+      'id="own-usage-chart-title"',
+      'id="own-usage-detail"',
+      'id="own-usage-axis-max"',
+      'id="own-usage-bars"',
+      'id="admin"'
+    ];
+
+    expect(elements.every((element) => html.includes(element))).toBe(true);
+    expect(elements.map((element) => html.indexOf(element))).toEqual(
+      [...elements.map((element) => html.indexOf(element))].sort((a, b) => a - b)
+    );
+    expect(html).toContain('id="own-usage-chart" class="panel usage-chart own-usage-chart" aria-labelledby="own-usage-chart-title" hidden');
+    expect(html).toContain('id="own-usage-detail" class="usage-detail" aria-live="polite" aria-atomic="true"');
+  });
+
+  it('renders only a regular user own history while preserving the existing admin chart path', () => {
+    const app = asset('app.js');
+
+    expect(app).toContain('function renderChart(user, elements, selectionScope)');
+    expect(app).toContain('function renderUsageChart(user)');
+    expect(app).toContain('function renderOwnUsageChart(user)');
+    expect(app).toContain("state.me.role === 'user'");
+    expect(app).toContain('usageLast7Days: state.usageLast7Days');
+    expect(app).toContain('renderOwnUsageChart(ownUsageUser)');
+    expect(app).toMatch(/function selectTarget[\s\S]*renderUsageChart\(user\)/);
+  });
+
+  it('fails closed on logout, authentication loss, and obsolete status responses', () => {
+    const app = asset('app.js');
+
+    expect(app).toContain('let sessionGeneration = 0');
+    expect(app).toContain('error.status = response.status');
+    expect(app).toContain('function clearAuthenticatedUi()');
+    expect(app).toContain('selectedUsageDays.clear()');
+    expect(app).toContain('adminUsers = []');
+    expect(app).toContain('renderUsageChart(undefined)');
+    expect(app).toContain('renderOwnUsageChart(undefined)');
+    expect(app).toContain("byId('target-options').replaceChildren()");
+    expect(app).toContain('async function refresh(expectedGeneration = sessionGeneration)');
+    expect(app).toContain('if (expectedGeneration !== sessionGeneration) return');
+    expect(app).toContain('if (error.status === 401)');
+    expect(app).toContain('sessionGeneration += 1');
+    expect(app).toContain('let loginPending = false');
+    expect(app).toContain('function setLoginPending(pending)');
+    expect(app).toContain('if (!selectedLoginUserId || loginPending) return');
+    expect(app).toContain('setLoginPending(true)');
+    expect(app).toContain('loginPending = false');
+    expect(app).toMatch(/byId\('logout'\)\.onclick[\s\S]*const logoutRequest = api[\s\S]*clearAuthenticatedUi\(\)[\s\S]*await logoutRequest[\s\S]*sessionGeneration \+= 1/);
   });
 });

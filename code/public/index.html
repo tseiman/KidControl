@@ -55,6 +55,20 @@
       <div id="devices" class="devices"></div>
       <button id="stop" class="danger wide" data-i18n="dashboard.stop">Stop my session</button>
 
+      <section id="own-usage-chart" class="panel usage-chart own-usage-chart" aria-labelledby="own-usage-chart-title" hidden>
+        <div class="usage-chart-heading">
+          <h2 id="own-usage-chart-title" data-i18n="usage.title">Usage · last 7 days</h2>
+          <span id="own-usage-detail" class="usage-detail" aria-live="polite" aria-atomic="true">--</span>
+        </div>
+        <div class="usage-chart-body">
+          <div class="usage-axis" aria-hidden="true">
+            <span id="own-usage-axis-max">1 h</span>
+            <span>0</span>
+          </div>
+          <div id="own-usage-bars" class="usage-bars"></div>
+        </div>
+      </section>
+
       <section id="admin" class="panel" hidden>
         <h2 data-i18n="admin.title">Superuser controls</h2>
         <form id="adjust">
@@ -76,7 +90,7 @@
         <section id="usage-chart" class="usage-chart" aria-labelledby="usage-chart-title" hidden>
           <div class="usage-chart-heading">
             <h3 id="usage-chart-title" data-i18n="usage.title">Usage · last 7 days</h3>
-            <span id="usage-detail" aria-live="polite" aria-atomic="true">--</span>
+            <span id="usage-detail" class="usage-detail" aria-live="polite" aria-atomic="true">--</span>
           </div>
           <div class="usage-chart-body">
             <div class="usage-axis" aria-hidden="true">

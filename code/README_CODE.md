@@ -123,7 +123,7 @@ Useful endpoints:
 - `POST /api/admin/adjust`
 - `POST /api/admin/restore`
 
-For authenticated superusers, `GET /api/status` includes seven chronological, zero-filled daily ledger totals ending on the current `Europe/Berlin` calendar day for every regular user. Regular-user responses do not expose the administrative user list or its usage history.
+For authenticated superusers, `GET /api/status` includes seven chronological, zero-filled daily ledger totals ending on the current `Europe/Berlin` calendar day for every regular user. A regular-user response includes the same history only for the authenticated user and does not expose the administrative user list or any other user's usage.
 
 ## Service logging
 

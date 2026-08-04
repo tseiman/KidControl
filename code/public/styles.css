@@ -270,8 +270,8 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   gap: .75rem;
   margin-bottom: .8rem;
 }
-.usage-chart h3 { margin: 0; font-size: 1rem; }
-#usage-detail {
+.usage-chart h2, .usage-chart h3 { margin: 0; font-size: 1rem; }
+.usage-detail {
   flex: none;
   color: var(--accent);
   background: var(--accent-soft);
@@ -283,6 +283,7 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+.own-usage-chart { margin-top: 0; padding-top: 1.2rem; }
 .usage-chart-body {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

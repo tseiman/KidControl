@@ -145,6 +145,7 @@ export function createKidControlServer(config: Config, core: KidControl, auth: A
         return send(res, 200, {
           me: userView(user), remainingSeconds: state.remainingSeconds, unlimited: state.unlimited,
           activeDeviceId: state.activeDeviceId, devices: core.deviceStatuses(),
+          ...(user.role === 'user' ? { usageLast7Days: core.usageHistory(user.id) } : {}),
           ...(user.role === 'superuser' ? { users: config.users.filter((item) => item.role === 'user').map((item) => ({
             id: item.id,
             displayName: item.displayName,

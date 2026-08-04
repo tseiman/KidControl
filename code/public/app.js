@@ -8,10 +8,14 @@ const t = (key, values) => translate(locale, key, values);
 let csrf = '';
 let state = null;
 let lastSync = Date.now();
+let sessionGeneration = 0;
+let loginPending = false;
 let publicUsers = [];
 let selectedLoginUserId = '';
 let adminUsers = [];
 const selectedUsageDays = new Map();
+const adminUsageElements = { chart: 'usage-chart', detail: 'usage-detail', axisMax: 'usage-axis-max', bars: 'usage-bars' };
+const ownUsageElements = { chart: 'own-usage-chart', detail: 'own-usage-detail', axisMax: 'own-usage-axis-max', bars: 'own-usage-bars' };
 
 applyTranslations(document, locale);
 byId('version-tag').textContent = t('version.label', { version: byId('version-tag').dataset.version });
@@ -39,7 +43,9 @@ async function api(path, options = {}) {
   });
   if (!response.ok) {
     const value = await response.json().catch(() => ({ error: 'Request failed' }));
-    throw new Error(value.error);
+    const error = new Error(value.error);
+    error.status = response.status;
+    throw error;
   }
   return response.status === 204 ? null : response.json();
 }
@@ -67,16 +73,24 @@ function avatar(user, className = '') {
   return wrapper;
 }
 
+function setLoginPending(pending) {
+  loginPending = pending;
+  byId('pin').disabled = pending;
+  byId('login-submit').disabled = pending || !selectedLoginUserId;
+  for (const button of byId('user-grid').querySelectorAll('button')) button.disabled = pending;
+}
+
 function renderLoginUsers(users) {
   publicUsers = users;
   if (!users.some((user) => user.id === selectedLoginUserId)) selectedLoginUserId = '';
   byId('user').value = selectedLoginUserId;
-  byId('login-submit').disabled = !selectedLoginUserId;
+  byId('login-submit').disabled = loginPending || !selectedLoginUserId;
   byId('user-grid').replaceChildren(...users.map((user) => {
     const button = document.createElement('button');
     const selected = user.id === selectedLoginUserId;
     button.type = 'button';
     button.className = `user-tile${selected ? ' selected' : ''}`;
+    button.disabled = loginPending;
     button.setAttribute('aria-pressed', String(selected));
     button.append(avatar(user, 'avatar-login'));
     const name = document.createElement('span');
@@ -117,26 +131,30 @@ function pickerUserRow(user) {
   return row;
 }
 
-function renderUsageChart(user) {
-  const chart = byId('usage-chart');
-  const focusedUsageDay = byId('usage-bars').contains(document.activeElement)
+function renderChart(user, elements, selectionScope) {
+  const chart = byId(elements.chart);
+  const barsElement = byId(elements.bars);
+  const focusedUsageDay = barsElement.contains(document.activeElement)
     ? document.activeElement.dataset.day
     : undefined;
   chart.hidden = !user;
   if (!user) {
-    byId('usage-bars').replaceChildren();
+    barsElement.replaceChildren();
+    byId(elements.detail).textContent = '--';
+    byId(elements.axisMax).textContent = '1 h';
     return;
   }
+  const selectionKey = `${selectionScope}:${user.id}`;
   const model = usageChartModel(user.usageLast7Days, locale);
-  const selected = selectedUsageEntry(model.bars, selectedUsageDays.get(user.id));
-  if (selected) selectedUsageDays.set(user.id, selected.day);
-  byId('usage-axis-max').textContent = `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(model.scaleSeconds / 3600)} h`;
+  const selected = selectedUsageEntry(model.bars, selectedUsageDays.get(selectionKey));
+  if (selected) selectedUsageDays.set(selectionKey, selected.day);
+  byId(elements.axisMax).textContent = `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(model.scaleSeconds / 3600)} h`;
   const showUsageDay = (day, persist = false) => {
     const entry = model.bars.find((candidate) => candidate.day === day) ?? selected;
     if (!entry) return;
-    if (persist) selectedUsageDays.set(user.id, entry.day);
-    byId('usage-detail').textContent = `${entry.label} · ${format(entry.seconds)}`;
-    for (const candidate of byId('usage-bars').querySelectorAll('.usage-bar')) {
+    if (persist) selectedUsageDays.set(selectionKey, entry.day);
+    byId(elements.detail).textContent = `${entry.label} · ${format(entry.seconds)}`;
+    for (const candidate of barsElement.querySelectorAll('.usage-bar')) {
       const active = candidate.dataset.day === entry.day;
       candidate.classList.toggle('is-selected', active);
       candidate.setAttribute('aria-pressed', String(active));
@@ -153,9 +171,9 @@ function renderUsageChart(user) {
     bar.title = accessibleLabel;
     bar.addEventListener('click', () => showUsageDay(entry.day, true));
     bar.addEventListener('pointerenter', () => showUsageDay(entry.day));
-    bar.addEventListener('pointerleave', () => showUsageDay(selectedUsageDays.get(user.id)));
+    bar.addEventListener('pointerleave', () => showUsageDay(selectedUsageDays.get(selectionKey)));
     bar.addEventListener('focus', () => showUsageDay(entry.day));
-    bar.addEventListener('blur', () => showUsageDay(selectedUsageDays.get(user.id)));
+    bar.addEventListener('blur', () => showUsageDay(selectedUsageDays.get(selectionKey)));
     bar.addEventListener('keydown', (event) => {
       let nextIndex;
       if (event.key === 'ArrowLeft') nextIndex = index - 1;
@@ -165,7 +183,7 @@ function renderUsageChart(user) {
       const next = model.bars[Math.max(0, Math.min(model.bars.length - 1, nextIndex))];
       if (!next) return;
       showUsageDay(next.day, true);
-      byId('usage-bars').querySelector(`[data-day="${next.day}"]`)?.focus();
+      barsElement.querySelector(`[data-day="${next.day}"]`)?.focus();
     });
     const track = document.createElement('span');
     track.className = 'usage-bar-track';
@@ -180,14 +198,56 @@ function renderUsageChart(user) {
     bar.append(track, label);
     return bar;
   });
-  byId('usage-bars').replaceChildren(...bars);
+  barsElement.replaceChildren(...bars);
   if (selected) showUsageDay(selected.day);
   if (focusedUsageDay) {
     const focusDay = model.bars.some((entry) => entry.day === focusedUsageDay)
       ? focusedUsageDay
       : selected?.day;
-    byId('usage-bars').querySelector(`[data-day="${focusDay}"]`)?.focus({ preventScroll: true });
+    barsElement.querySelector(`[data-day="${focusDay}"]`)?.focus({ preventScroll: true });
   }
+}
+
+function renderUsageChart(user) {
+  renderChart(user, adminUsageElements, 'admin');
+}
+
+function renderOwnUsageChart(user) {
+  renderChart(user, ownUsageElements, 'own');
+}
+
+function clearAuthenticatedUi() {
+  csrf = '';
+  state = null;
+  lastSync = Date.now();
+  adminUsers = [];
+  selectedUsageDays.clear();
+  setLoginPending(false);
+  byId('summary-avatar').replaceChildren();
+  byId('summary-user-name').textContent = '—';
+  byId('remaining').textContent = '--:--:--';
+  byId('devices').replaceChildren();
+  byId('stop').hidden = true;
+  byId('admin').hidden = true;
+  byId('target').value = '';
+  byId('target-options').replaceChildren();
+  byId('target-options').hidden = true;
+  byId('target-trigger').replaceChildren();
+  byId('target-trigger').setAttribute('aria-expanded', 'false');
+  byId('target-trigger').disabled = true;
+  byId('adjust-submit').disabled = true;
+  renderUsageChart(undefined);
+  renderOwnUsageChart(undefined);
+  byId('dashboard').hidden = true;
+  byId('login').hidden = false;
+}
+
+function failClosed(error) {
+  if (error.status !== 401) return false;
+  sessionGeneration += 1;
+  clearAuthenticatedUi();
+  note(localizedError(error.message), true);
+  return true;
 }
 
 function closeTargetPicker(focusTrigger = false) {
@@ -243,8 +303,20 @@ function openTargetPicker() {
   byId('target-trigger').setAttribute('aria-expanded', 'true');
 }
 
-async function refresh() {
-  state = await api('/api/status');
+async function refresh(expectedGeneration = sessionGeneration) {
+  let nextState;
+  try {
+    nextState = await api('/api/status');
+  } catch (error) {
+    if (expectedGeneration !== sessionGeneration) return;
+    if (error.status === 401) {
+      failClosed(error);
+      return;
+    }
+    throw error;
+  }
+  if (expectedGeneration !== sessionGeneration) return;
+  state = nextState;
   lastSync = Date.now();
   byId('login').hidden = true;
   byId('dashboard').hidden = false;
@@ -267,19 +339,27 @@ async function refresh() {
     return card;
   }));
   byId('stop').hidden = !state.activeDeviceId;
+  const ownUsageUser = state.me.role === 'user'
+    ? { ...state.me, usageLast7Days: state.usageLast7Days }
+    : undefined;
+  renderOwnUsageChart(ownUsageUser);
   byId('admin').hidden = state.me.role !== 'superuser';
   if (state.users) renderTargetPicker(state.users);
 }
 
 async function mutate(path, value = {}) {
+  const expectedGeneration = sessionGeneration;
   try {
     await api(path, { method: 'POST', body: JSON.stringify(value) });
+    if (expectedGeneration !== sessionGeneration) return;
     note(t('status.updated'));
-    await refresh();
+    await refresh(expectedGeneration);
   } catch (error) {
+    if (expectedGeneration !== sessionGeneration) return;
+    if (failClosed(error)) return;
     if (error.message === 'Apple TV is not on') {
       // Power can change after rendering; refresh silently so the disabled button reflects authoritative state.
-      await refresh().catch(() => undefined);
+      await refresh(expectedGeneration).catch(() => undefined);
       return;
     }
     note(localizedError(error.message), true);
@@ -288,26 +368,44 @@ async function mutate(path, value = {}) {
 
 byId('login-form').onsubmit = async (event) => {
   event.preventDefault();
-  if (!selectedLoginUserId) return;
+  if (!selectedLoginUserId || loginPending) return;
+  setLoginPending(true);
+  const expectedGeneration = ++sessionGeneration;
   try {
     const result = await api('/api/login', {
       method: 'POST',
       body: JSON.stringify({ userId: selectedLoginUserId, pin: byId('pin').value })
     });
+    if (expectedGeneration !== sessionGeneration) return;
     csrf = result.csrf;
     byId('pin').value = '';
-    await refresh();
-  } catch (error) { note(localizedError(error.message), true); }
+    await refresh(expectedGeneration);
+  } catch (error) {
+    if (expectedGeneration === sessionGeneration) note(localizedError(error.message), true);
+  } finally {
+    if (expectedGeneration === sessionGeneration) setLoginPending(false);
+  }
 };
 byId('stop').onclick = () => mutate('/api/stop');
 byId('restore').onclick = () => mutate('/api/admin/restore');
 byId('logout').onclick = async () => {
+  const expectedGeneration = ++sessionGeneration;
+  const logoutRequest = api('/api/logout', { method: 'POST', body: '{}' });
+  clearAuthenticatedUi();
+  setLoginPending(true);
   try {
-    await api('/api/logout', { method: 'POST', body: '{}' });
-    csrf = ''; state = null;
-    byId('dashboard').hidden = true; byId('login').hidden = false;
+    await logoutRequest;
+    if (expectedGeneration !== sessionGeneration) return;
+    sessionGeneration += 1;
+    setLoginPending(false);
     note(t('status.signedOut'));
-  } catch (error) { note(localizedError(error.message), true); }
+  } catch (error) {
+    if (expectedGeneration !== sessionGeneration) return;
+    if (!failClosed(error)) {
+      setLoginPending(false);
+      note(localizedError(error.message), true);
+    }
+  }
 };
 byId('adjust').onsubmit = (event) => {
   event.preventDefault();
@@ -353,11 +451,13 @@ setInterval(() => {
 (async () => {
   const choices = await api('/api/public');
   renderLoginUsers(choices.users);
+  const expectedGeneration = sessionGeneration;
   try {
     const session = await api('/api/session');
+    if (expectedGeneration !== sessionGeneration) return;
     csrf = session.csrf;
-    await refresh();
+    await refresh(expectedGeneration);
   } catch {
-    byId('login').hidden = false;
+    if (expectedGeneration === sessionGeneration) clearAuthenticatedUi();
   }
 })();
