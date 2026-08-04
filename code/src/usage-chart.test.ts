@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { usageChartModel } from '../public/usage-chart.js';
+import { selectedUsageEntry, usageChartModel } from '../public/usage-chart.js';
 
 const history = [
   { day: '2026-07-25', seconds: 0 },
@@ -34,5 +34,13 @@ describe('seven-day usage chart model', () => {
 
     expect(model.scaleSeconds).toBe(3_600);
     expect(model.bars.every((bar) => bar.ratio === 0)).toBe(true);
+  });
+
+  it('preserves an available selected day and otherwise selects the current last day', () => {
+    const bars = usageChartModel(history, 'de').bars;
+
+    expect(selectedUsageEntry(bars, '2026-07-28')?.day).toBe('2026-07-28');
+    expect(selectedUsageEntry(bars, 'missing')?.day).toBe('2026-07-31');
+    expect(selectedUsageEntry([], '2026-07-28')).toBeUndefined();
   });
 });

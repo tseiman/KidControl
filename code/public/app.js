@@ -1,6 +1,6 @@
 import { canStart, initials } from './ui-model.js';
 import { applyTranslations, resolveLocale, translate } from './i18n.js';
-import { usageChartModel } from './usage-chart.js';
+import { selectedUsageEntry, usageChartModel } from './usage-chart.js';
 
 const byId = (id) => document.getElementById(id);
 const locale = resolveLocale(navigator.languages?.length ? navigator.languages : [navigator.language]);
@@ -11,6 +11,7 @@ let lastSync = Date.now();
 let publicUsers = [];
 let selectedLoginUserId = '';
 let adminUsers = [];
+const selectedUsageDays = new Map();
 
 applyTranslations(document, locale);
 byId('version-tag').textContent = t('version.label', { version: byId('version-tag').dataset.version });
@@ -118,20 +119,54 @@ function pickerUserRow(user) {
 
 function renderUsageChart(user) {
   const chart = byId('usage-chart');
+  const focusedUsageDay = byId('usage-bars').contains(document.activeElement)
+    ? document.activeElement.dataset.day
+    : undefined;
   chart.hidden = !user;
   if (!user) {
     byId('usage-bars').replaceChildren();
     return;
   }
   const model = usageChartModel(user.usageLast7Days, locale);
+  const selected = selectedUsageEntry(model.bars, selectedUsageDays.get(user.id));
+  if (selected) selectedUsageDays.set(user.id, selected.day);
   byId('usage-axis-max').textContent = `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(model.scaleSeconds / 3600)} h`;
-  byId('usage-bars').replaceChildren(...model.bars.map((entry) => {
-    const bar = document.createElement('div');
+  const showUsageDay = (day, persist = false) => {
+    const entry = model.bars.find((candidate) => candidate.day === day) ?? selected;
+    if (!entry) return;
+    if (persist) selectedUsageDays.set(user.id, entry.day);
+    byId('usage-detail').textContent = `${entry.label} · ${format(entry.seconds)}`;
+    for (const candidate of byId('usage-bars').querySelectorAll('.usage-bar')) {
+      const active = candidate.dataset.day === entry.day;
+      candidate.classList.toggle('is-selected', active);
+      candidate.setAttribute('aria-pressed', String(active));
+    }
+  };
+  const bars = model.bars.map((entry, index) => {
+    const bar = document.createElement('button');
+    bar.type = 'button';
     bar.className = 'usage-bar';
-    bar.setAttribute('role', 'listitem');
+    bar.dataset.day = entry.day;
+    bar.setAttribute('aria-pressed', 'false');
     const accessibleLabel = t('usage.barLabel', { day: entry.label, time: format(entry.seconds) });
     bar.setAttribute('aria-label', accessibleLabel);
     bar.title = accessibleLabel;
+    bar.addEventListener('click', () => showUsageDay(entry.day, true));
+    bar.addEventListener('pointerenter', () => showUsageDay(entry.day));
+    bar.addEventListener('pointerleave', () => showUsageDay(selectedUsageDays.get(user.id)));
+    bar.addEventListener('focus', () => showUsageDay(entry.day));
+    bar.addEventListener('blur', () => showUsageDay(selectedUsageDays.get(user.id)));
+    bar.addEventListener('keydown', (event) => {
+      let nextIndex;
+      if (event.key === 'ArrowLeft') nextIndex = index - 1;
+      if (event.key === 'ArrowRight') nextIndex = index + 1;
+      if (nextIndex === undefined) return;
+      event.preventDefault();
+      const next = model.bars[Math.max(0, Math.min(model.bars.length - 1, nextIndex))];
+      if (!next) return;
+      showUsageDay(next.day, true);
+      byId('usage-bars').querySelector(`[data-day="${next.day}"]`)?.focus();
+    });
     const track = document.createElement('span');
     track.className = 'usage-bar-track';
     track.setAttribute('aria-hidden', 'true');
@@ -144,7 +179,15 @@ function renderUsageChart(user) {
     label.textContent = entry.label;
     bar.append(track, label);
     return bar;
-  }));
+  });
+  byId('usage-bars').replaceChildren(...bars);
+  if (selected) showUsageDay(selected.day);
+  if (focusedUsageDay) {
+    const focusDay = model.bars.some((entry) => entry.day === focusedUsageDay)
+      ? focusedUsageDay
+      : selected?.day;
+    byId('usage-bars').querySelector(`[data-day="${focusDay}"]`)?.focus({ preventScroll: true });
+  }
 }
 
 function closeTargetPicker(focusTrigger = false) {

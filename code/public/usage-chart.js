@@ -12,6 +12,10 @@ function scaleFor(maximumSeconds) {
   return Math.max(3_600, Math.ceil(maximumSeconds / step) * step);
 }
 
+export function selectedUsageEntry(entries, preferredDay) {
+  return entries.find((entry) => entry.day === preferredDay) ?? entries.at(-1);
+}
+
 export function usageChartModel(history, locale) {
   const labels = weekdayLabels[locale] ?? weekdayLabels.en;
   const entries = Array.isArray(history) ? history : [];

@@ -263,7 +263,26 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   padding-top: 1rem;
   border-top: 1px solid var(--line);
 }
-.usage-chart h3 { margin: 0 0 .8rem; font-size: 1rem; }
+.usage-chart-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-bottom: .8rem;
+}
+.usage-chart h3 { margin: 0; font-size: 1rem; }
+#usage-detail {
+  flex: none;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 999px;
+  padding: .2rem .55rem;
+  font-size: .8rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .usage-chart-body {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -289,7 +308,16 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   display: grid;
   grid-template-rows: 1fr auto;
   gap: .4rem;
+  width: 100%;
   min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font-weight: inherit;
 }
 .usage-bar-track {
   height: clamp(120px, 30vw, 190px);
@@ -308,6 +336,11 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   transition: height .25s ease;
 }
 .usage-bar:last-child .usage-bar-fill { background: linear-gradient(180deg, #a6f5dc, #4aa7c8); }
+.usage-bar.is-selected .usage-bar-track {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft), 0 6px 18px #0005;
+}
+.usage-bar.is-selected .usage-day { color: var(--text); }
 .usage-day {
   color: var(--muted);
   font-size: clamp(.68rem, 2.7vw, .82rem);
