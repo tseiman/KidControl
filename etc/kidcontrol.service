@@ -12,12 +12,10 @@ WorkingDirectory=/opt/kidcontrol/code
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
 ExecStart=/usr/bin/env node /opt/kidcontrol/code/dist/main.js
 EnvironmentFile=/etc/kidcontrol/kidcontrol.env
-StandardOutput=append:/var/log/kidcontrol/kidcontrol.log
-StandardError=append:/var/log/kidcontrol/kidcontrol_error.log
+StandardOutput=journal
+StandardError=journal
 Restart=on-failure
 RestartSec=5s
-LogsDirectory=kidcontrol
-LogsDirectoryMode=0750
 StateDirectory=kidcontrol
 StateDirectoryMode=0700
 ConfigurationDirectory=kidcontrol

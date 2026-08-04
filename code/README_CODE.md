@@ -125,7 +125,7 @@ Useful endpoints:
 
 ## Service logging
 
-The example systemd unit appends application stdout to `/var/log/kidcontrol/kidcontrol.log` and stderr to `/var/log/kidcontrol/kidcontrol_error.log`. KidControl writes single-line `key=value` operational events to these streams. String values are quoted and safely escape quotes, backslashes, and line breaks:
+The example systemd unit sends application stdout and stderr to the standard systemd journal. KidControl writes single-line `key=value` operational events to these streams. String values are quoted and safely escape quotes, backslashes, and line breaks:
 
 - `login` — user ID/name and validated client IP;
 - `session-start` — user, Apple TV, and remaining seconds;
@@ -134,15 +134,13 @@ The example systemd unit appends application stdout to `/var/log/kidcontrol/kidc
 - `budget-change` — daily budget allocation or a superuser adjustment including amount, target, and author;
 - `request-error` and `acl-error` — unexpected request or UniFi ACL failures without credentials.
 
-PINs, cookies, CSRF values, API keys, and Apple TV credentials are never included. The example unit uses `LogsDirectory=kidcontrol` and `LogsDirectoryMode=0750`; systemd therefore creates `/var/log/kidcontrol` as `kidcontrol:kidcontrol` when needed. `UMask=0077` protects newly created log files. Follow them with:
+PINs, cookies, CSRF values, API keys, and Apple TV credentials are never included. KidControl does not create separate application log files. Follow the journal with:
 
 ```bash
-sudo tail -F /var/log/kidcontrol/kidcontrol.log /var/log/kidcontrol/kidcontrol_error.log
+sudo journalctl -u kidcontrol.service -f -o short-iso-precise
 ```
 
-For example, filter session stops with `grep 'event=session-stop' /var/log/kidcontrol/kidcontrol.log`.
-
-systemd manager messages remain available through `sudo journalctl -u kidcontrol.service` but no longer contain normal application stdout/stderr when the example unit is installed.
+For example, filter session stops with `sudo journalctl -u kidcontrol.service -o cat --no-pager | grep 'event=session-stop'`.
 
 ## Accounting and recovery
 

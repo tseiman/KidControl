@@ -206,15 +206,13 @@ sudo systemctl enable --now kidcontrol.service
 sudo systemctl status --no-pager kidcontrol.service
 ```
 
-The unit uses `LogsDirectory=kidcontrol` and `LogsDirectoryMode=0750`, so systemd automatically creates `/var/log/kidcontrol` as `kidcontrol:kidcontrol` if it does not exist. No separate directory setup is required. Application stdout and structured operational events are appended to `/var/log/kidcontrol/kidcontrol.log`; stderr and application errors are appended to `/var/log/kidcontrol/kidcontrol_error.log`. The service's restrictive `UMask=0077` keeps newly created log files private to the service account and root.
+The unit sends application stdout, stderr, structured operational events, and systemd lifecycle messages to the standard systemd journal. KidControl does not create or use separate files under `/var/log/kidcontrol`.
 
-Follow application output and errors with:
+Follow application output and errors with timestamps using:
 
 ```bash
-sudo tail -F /var/log/kidcontrol/kidcontrol.log /var/log/kidcontrol/kidcontrol_error.log
+sudo journalctl -u kidcontrol.service -f -o short-iso-precise
 ```
-
-systemd lifecycle messages such as service starts, stops, and restart failures remain in `sudo journalctl -u kidcontrol.service`.
 
 The first application line after every process start is the Git revision embedded during the build, for example `KidControl version 27b6a88`. A `-dirty` suffix means the build contained local changes that were not committed; `unknown` means `dist/version.txt` was not installed. Neither state is expected for a normal production update.
 
@@ -231,7 +229,7 @@ cd ~/KidControl
 
 The script checks the clean `main` checkout, Node.js version, active service, protected configuration/state paths, and systemd unit. It then pulls with `--ff-only`, installs dependencies, runs all tests, builds, audits production dependencies, verifies the embedded revision, and prunes development dependencies before it stops the service.
 
-After confirmation, it replaces only `/opt/kidcontrol/code/dist` and `/opt/kidcontrol/code/node_modules`, installs the package files and systemd unit, restarts KidControl, and checks both the active service and matching revision in the newly appended stdout log. It does not modify `/etc/kidcontrol` or `/var/lib/kidcontrol`. If an install command fails after the stop, it attempts to start the service again.
+After confirmation, it replaces only `/opt/kidcontrol/code/dist` and `/opt/kidcontrol/code/node_modules`, installs the package files and systemd unit, restarts KidControl, and checks both the active service and matching revision in the journal for the current systemd invocation. It does not modify `/etc/kidcontrol` or `/var/lib/kidcontrol`. If an install command fails after the stop, it attempts to start the service again.
 
 To skip only the final confirmation, use:
 
@@ -271,10 +269,10 @@ sudo install -o root -g root -m 0644 etc/kidcontrol.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl start kidcontrol.service
 sudo systemctl status --no-pager kidcontrol.service
-sudo tail -n 50 /var/log/kidcontrol/kidcontrol.log
+sudo journalctl -u kidcontrol.service -n 50 --no-pager -o short-iso-precise
 ```
 
-Confirm that `/var/log/kidcontrol/kidcontrol.log` contains `KidControl version` followed by the short revision just pulled and that the same revision appears below the **Documentation** link in the WebUI. This proves that systemd and the browser loaded the newly built application rather than an older `/opt/kidcontrol` copy. If only the browser still shows old assets, perform a hard reload; favicons and Apple home-screen icons may remain cached separately.
+Confirm that the current startup output contains `KidControl version` followed by the short revision just pulled and that the same revision appears below the **Documentation** link in the WebUI. This proves that systemd and the browser loaded the newly built application rather than an older `/opt/kidcontrol` copy. If only the browser still shows old assets, perform a hard reload; favicons and Apple home-screen icons may remain cached separately.
 
 Do not replace `/etc/kidcontrol/config.json`, `/etc/kidcontrol/kidcontrol.env`, `/etc/kidcontrol/.atv-credentials.json`, `/etc/kidcontrol/icons`, or `/var/lib/kidcontrol/state.sqlite` during a normal update. Review new example files in Git manually if a release documents a configuration change.
 

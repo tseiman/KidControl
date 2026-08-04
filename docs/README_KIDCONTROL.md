@@ -21,7 +21,7 @@ The production TypeScript implementation exists under `code/`. Automated tests c
 - user administration exclusively through the configuration file, not through the WebUI;
 - superuser functions provided through the WebUI with an accessible custom user picker;
 - client-side English/German localization selected from browser preferences, with English as the fallback;
-- operational `key=value` logging to standard output/error, redirected by the example systemd unit to separate files under `/var/log/kidcontrol` without a dedicated Node.js syslog library.
+- operational `key=value` logging to standard output/error, collected by the standard systemd journal without a dedicated Node.js syslog library or separate application log files.
 
 PINs are deliberately present in the protected mode-`0600` runtime configuration, but are never stored in the browser; login uses HTTPS and keyed server-side fingerprints. The significantly more powerful UniFi API key must never be stored in source code, user configuration, or Git.
 
@@ -240,7 +240,7 @@ flowchart LR
     APP --> UNIFI[UniFi Network API]
     APP --> ATV[Apple TV state adapter]
     APP --> LOG[stdout / stderr]
-    LOG --> LOGFILES[/var/log/kidcontrol files]
+    LOG --> JOURNAL[systemd journal]
     DOC[docs/README_KIDCONTROL.md] --> UI
 ```
 
@@ -249,10 +249,10 @@ Recommended division:
 - TypeScript/Node.js for the HTTP API, WebUI, authentication, time logic, and UniFi access;
 - SQLite as a single local database file;
 - the separately maintained `node-appletv-remote` fork as a regular TypeScript dependency for Apple TV Companion power-state signals;
-- systemd for startup, restarts, private log-directory creation, and stdout/stderr file redirection;
+- systemd for startup, restarts, and journal collection of stdout/stderr;
 - as few frameworks as practical, with no separate database server or queue.
 
-Node.js writes safe single-line `key=value` events to stdout/stderr without a dedicated syslog dependency. The example systemd unit appends these streams to `/var/log/kidcontrol/kidcontrol.log` and `/var/log/kidcontrol/kidcontrol_error.log`; systemd manager lifecycle messages remain in the journal.
+Node.js writes safe single-line `key=value` events to stdout/stderr without a dedicated syslog dependency. The example systemd unit sends both streams to the standard journal together with systemd lifecycle messages. KidControl does not maintain separate files under `/var/log/kidcontrol`.
 
 ## 11. Implemented Technical Decisions and Remaining Live Validation
 

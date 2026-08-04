@@ -9,10 +9,11 @@ describe('systemd network sandbox', () => {
     expect(restriction?.split(/\s+/)).toContain('AF_NETLINK');
   });
 
-  it('creates the private log directory and appends stdout and stderr to separate files', () => {
-    expect(unit).toContain('LogsDirectory=kidcontrol');
-    expect(unit).toContain('LogsDirectoryMode=0750');
-    expect(unit).toContain('StandardOutput=append:/var/log/kidcontrol/kidcontrol.log');
-    expect(unit).toContain('StandardError=append:/var/log/kidcontrol/kidcontrol_error.log');
+  it('uses the standard systemd journal without private append-only log files', () => {
+    expect(unit).not.toContain('LogsDirectory=');
+    expect(unit).not.toContain('LogsDirectoryMode=');
+    expect(unit).not.toContain('StandardOutput=append:');
+    expect(unit).not.toContain('StandardError=append:');
+    expect(unit).not.toContain('/var/log/kidcontrol');
   });
 });

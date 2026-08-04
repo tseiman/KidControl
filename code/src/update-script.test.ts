@@ -46,14 +46,15 @@ describe('production update script', () => {
     expect(revision).toBeLessThan(stop);
   });
 
-  it('waits for startup and retries the new stdout log revision check ten times', () => {
-    expect(script).toContain('LOG_FILE=/var/log/kidcontrol/kidcontrol.log');
-    expect(script).toContain('LOG_LINES_BEFORE_START');
-    expect(position('sudo systemctl stop "$SERVICE"')).toBeLessThan(position("LOG_LINES_BEFORE_START=$(sudo awk"));
+  it('waits for startup and verifies the revision in the current journald invocation', () => {
+    expect(script).not.toContain('/var/log/kidcontrol');
+    expect(script).not.toContain('LOG_LINES_BEFORE_START');
+    expect(script).toContain('InvocationID');
+    expect(script).toContain('_SYSTEMD_INVOCATION_ID="$INVOCATION_ID"');
     expect(script).toContain('for _attempt in {1..10}');
     expect(script).toContain('sleep 2');
     expect(script).toContain('KidControl version $REVISION');
-    expect(script).not.toContain('JOURNAL=$(sudo journalctl');
+    expect(script).toContain('JOURNAL=$(sudo journalctl');
   });
 
   it('limits replacement to generated code and verifies the restarted service', () => {
