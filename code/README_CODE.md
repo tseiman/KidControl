@@ -13,7 +13,7 @@ This directory contains the production TypeScript service, automated tests, and 
 - `src/server.ts` — framework-light `node:http` API and static WebUI
 - `src/runtime.ts` — deployment environment validation
 - `src/main.ts` — production wiring and graceful shutdown
-- `public/` — dependency-free smartphone WebUI with profile tiles, safe icon fallbacks, an accessible superuser picker, and client-side English/German localization
+- `public/` — dependency-free smartphone WebUI with profile tiles, safe icon fallbacks, an accessible superuser picker, a localized seven-day usage chart, and client-side English/German localization
 
 The policy engine serializes all local mutations and reconciliation work through one queue. External network calls never run inside a SQLite transaction.
 
@@ -122,6 +122,8 @@ Useful endpoints:
 - `POST /api/logout`
 - `POST /api/admin/adjust`
 - `POST /api/admin/restore`
+
+For authenticated superusers, `GET /api/status` includes seven chronological, zero-filled daily ledger totals ending on the current `Europe/Berlin` calendar day for every regular user. Regular-user responses do not expose the administrative user list or its usage history.
 
 ## Service logging
 

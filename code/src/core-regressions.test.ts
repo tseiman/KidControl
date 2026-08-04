@@ -206,6 +206,7 @@ describe('mandatory accounting and reconciliation regressions', () => {
     expect(disk.db.prepare('SELECT version FROM schema_version').get()).toEqual({ version: 1 });
     expect(disk.db.prepare('PRAGMA foreign_keys').get()).toEqual({ foreign_keys: 1 });
     expect(disk.db.prepare('PRAGMA synchronous').get()).toEqual({ synchronous: 2 });
+    expect(disk.db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='ledger_user_day'").get()).toEqual({ name: 'ledger_user_day' });
     expect(statSync(path).mode & 0o777).toBe(0o600);
     disk.close();
   });

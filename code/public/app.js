@@ -1,5 +1,6 @@
 import { canStart, initials } from './ui-model.js';
 import { applyTranslations, resolveLocale, translate } from './i18n.js';
+import { usageChartModel } from './usage-chart.js';
 
 const byId = (id) => document.getElementById(id);
 const locale = resolveLocale(navigator.languages?.length ? navigator.languages : [navigator.language]);
@@ -115,6 +116,37 @@ function pickerUserRow(user) {
   return row;
 }
 
+function renderUsageChart(user) {
+  const chart = byId('usage-chart');
+  chart.hidden = !user;
+  if (!user) {
+    byId('usage-bars').replaceChildren();
+    return;
+  }
+  const model = usageChartModel(user.usageLast7Days, locale);
+  byId('usage-axis-max').textContent = `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(model.scaleSeconds / 3600)} h`;
+  byId('usage-bars').replaceChildren(...model.bars.map((entry) => {
+    const bar = document.createElement('div');
+    bar.className = 'usage-bar';
+    bar.setAttribute('role', 'listitem');
+    const accessibleLabel = t('usage.barLabel', { day: entry.label, time: format(entry.seconds) });
+    bar.setAttribute('aria-label', accessibleLabel);
+    bar.title = accessibleLabel;
+    const track = document.createElement('span');
+    track.className = 'usage-bar-track';
+    track.setAttribute('aria-hidden', 'true');
+    const fill = document.createElement('span');
+    fill.className = 'usage-bar-fill';
+    fill.style.height = `${entry.ratio * 100}%`;
+    track.append(fill);
+    const label = document.createElement('span');
+    label.className = 'usage-day';
+    label.textContent = entry.label;
+    bar.append(track, label);
+    return bar;
+  }));
+}
+
 function closeTargetPicker(focusTrigger = false) {
   byId('target-options').hidden = true;
   byId('target-trigger').setAttribute('aria-expanded', 'false');
@@ -127,6 +159,7 @@ function selectTarget(userId, focusTrigger = false, closePicker = true) {
   byId('target-trigger').replaceChildren(user ? pickerUserRow(user) : document.createTextNode(t('picker.noUsers')));
   byId('target-trigger').disabled = !user;
   byId('adjust-submit').disabled = !user;
+  renderUsageChart(user);
   for (const option of byId('target-options').querySelectorAll('[role="option"]')) {
     option.setAttribute('aria-selected', String(option.dataset.userId === user?.id));
   }

@@ -258,6 +258,64 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+.usage-chart {
+  margin-top: .25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+.usage-chart h3 { margin: 0 0 .8rem; font-size: 1rem; }
+.usage-chart-body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: .55rem;
+}
+.usage-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: .72rem;
+  font-variant-numeric: tabular-nums;
+  padding-bottom: 1.45rem;
+}
+.usage-bars {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  align-items: end;
+  gap: clamp(.3rem, 2vw, .7rem);
+  min-width: 0;
+}
+.usage-bar {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: .4rem;
+  min-width: 0;
+}
+.usage-bar-track {
+  height: clamp(120px, 30vw, 190px);
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+  background: #0e1728;
+  border: 1px solid var(--line);
+  border-radius: 8px 8px 4px 4px;
+}
+.usage-bar-fill {
+  display: block;
+  width: 100%;
+  background: linear-gradient(180deg, #83edcb, var(--accent));
+  border-radius: 6px 6px 2px 2px;
+  transition: height .25s ease;
+}
+.usage-bar:last-child .usage-bar-fill { background: linear-gradient(180deg, #a6f5dc, #4aa7c8); }
+.usage-day {
+  color: var(--muted);
+  font-size: clamp(.68rem, 2.7vw, .82rem);
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+}
+
 @media (max-width: 560px) {
   .user-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .summary { grid-template-columns: auto minmax(0, 1fr); gap: .75rem 1rem; }

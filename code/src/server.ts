@@ -115,13 +115,14 @@ export function createKidControlServer(config: Config, core: KidControl, auth: A
       if (method === 'GET' && url.pathname === '/docs') {
         return send(res, 200, `<!doctype html><html lang="en"><meta name="viewport" content="width=device-width"><link rel="stylesheet" href="/styles.css"><title>KidControl documentation</title><main class="docs">${markdown(options.documentation)}</main></html>`);
       }
-      if (method === 'GET' && ['/', '/index.html', '/app.js', '/ui-model.js', '/i18n.js', '/styles.css', '/favicon.ico', '/icon.png', '/apple-touch-icon.png'].includes(url.pathname)) {
+      if (method === 'GET' && ['/', '/index.html', '/app.js', '/ui-model.js', '/i18n.js', '/usage-chart.js', '/styles.css', '/favicon.ico', '/icon.png', '/apple-touch-icon.png'].includes(url.pathname)) {
         const name = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
         const types: Record<string, string> = {
           'index.html': 'text/html; charset=utf-8',
           'app.js': 'text/javascript; charset=utf-8',
           'ui-model.js': 'text/javascript; charset=utf-8',
           'i18n.js': 'text/javascript; charset=utf-8',
+          'usage-chart.js': 'text/javascript; charset=utf-8',
           'styles.css': 'text/css; charset=utf-8',
           'favicon.ico': 'image/x-icon',
           'icon.png': 'image/png',
@@ -144,7 +145,13 @@ export function createKidControlServer(config: Config, core: KidControl, auth: A
         return send(res, 200, {
           me: userView(user), remainingSeconds: state.remainingSeconds, unlimited: state.unlimited,
           activeDeviceId: state.activeDeviceId, devices: core.deviceStatuses(),
-          ...(user.role === 'superuser' ? { users: config.users.filter((item) => item.role === 'user').map((item) => ({ id: item.id, displayName: item.displayName, ...(item.icon ? { iconUrl: iconUrl(item) } : {}), remainingSeconds: core.status(item.id).remainingSeconds })) } : {})
+          ...(user.role === 'superuser' ? { users: config.users.filter((item) => item.role === 'user').map((item) => ({
+            id: item.id,
+            displayName: item.displayName,
+            ...(item.icon ? { iconUrl: iconUrl(item) } : {}),
+            remainingSeconds: core.status(item.id).remainingSeconds,
+            usageLast7Days: core.usageHistory(item.id)
+          })) } : {})
         }, { 'Cache-Control': 'no-store' });
       }
       if (method !== 'POST') return send(res, 404, { error: 'not found' }, { 'Cache-Control': 'no-store' });

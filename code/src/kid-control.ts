@@ -90,6 +90,18 @@ export class KidControl {
     };
   }
 
+  usageHistory(userId: string): Array<{ day: string; seconds: number }> {
+    this.user(userId);
+    const today = berlinDay(this.clock(), this.config.timezone);
+    const [year, month, day] = today.split('-').map(Number) as [number, number, number];
+    const anchor = Date.UTC(year, month - 1, day);
+    const days = Array.from({ length: 7 }, (_, index) =>
+      new Date(anchor - (6 - index) * 86_400_000).toISOString().slice(0, 10)
+    );
+    const totals = this.store.usageTotals(userId, days[0]!, days[6]!);
+    return days.map((value) => ({ day: value, seconds: totals.get(value) ?? 0 }));
+  }
+
   deviceStatuses() {
     return this.config.devices.map((device) => {
       const acl = this.store.aclState(device.id);

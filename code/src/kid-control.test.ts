@@ -127,6 +127,40 @@ describe('claim, accounting and reconciliation policy', () => {
     expect(store.aclState('one')).toMatchObject({ desiredBlocked: true, actualBlocked: null, source: 'pending' });
   });
 
+  it('returns seven chronological Berlin calendar days ending today with zero-filled usage', () => {
+    for (const [index, day, seconds] of [
+      [1, '2026-07-25', 600],
+      [2, '2026-07-28', 3_600],
+      [3, '2026-07-31', 1_800],
+      [4, '2026-07-24', 9_999],
+      [5, '2026-07-28', 600]
+    ] as const) {
+      const sessionId = `history-${index}`;
+      store.db.prepare('INSERT INTO usage_sessions(id,user_id,device_id,day,started_at,accounted_at,ended_at,end_reason,seconds) VALUES(?,?,?,?,?,?,?,?,?)')
+        .run(sessionId, 'a', 'one', day, index, index + seconds, index + seconds, 'test', seconds);
+      store.db.prepare('INSERT INTO ledger(user_id,day,seconds,session_id,created_at) VALUES(?,?,?,?,?)')
+        .run('a', day, seconds, sessionId, index + seconds);
+    }
+
+    expect(app.usageHistory('a')).toEqual([
+      { day: '2026-07-25', seconds: 600 },
+      { day: '2026-07-26', seconds: 0 },
+      { day: '2026-07-27', seconds: 0 },
+      { day: '2026-07-28', seconds: 4_200 },
+      { day: '2026-07-29', seconds: 0 },
+      { day: '2026-07-30', seconds: 0 },
+      { day: '2026-07-31', seconds: 1_800 }
+    ]);
+  });
+
+  it.each([
+    ['year boundary', '2027-01-02T12:00:00Z', ['2026-12-27', '2026-12-28', '2026-12-29', '2026-12-30', '2026-12-31', '2027-01-01', '2027-01-02']],
+    ['spring DST week', '2026-03-31T12:00:00Z', ['2026-03-25', '2026-03-26', '2026-03-27', '2026-03-28', '2026-03-29', '2026-03-30', '2026-03-31']]
+  ])('keeps seven calendar dates across a %s', (_label, instant, expectedDays) => {
+    now = new Date(instant);
+    expect(app.usageHistory('a').map((entry) => entry.day)).toEqual(expectedDays);
+  });
+
   it('restores desired ACL state only on explicit superuser reset', async () => {
     await app.adoptAcl('one', false); await app.restore('root');
     expect(acl.setBlocked.mock.calls).toContainEqual(['one', true]);

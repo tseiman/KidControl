@@ -123,6 +123,11 @@ describe('hardened HTTP API and local smoke journey', () => {
     expect(localization.status).toBe(200);
     expect(localization.headers.get('content-type')).toBe('text/javascript; charset=utf-8');
     expect(await localization.text()).toContain('export function resolveLocale');
+
+    const usageChart = await call('/usage-chart.js', { headers: { host: 'kidcontrol.test' } });
+    expect(usageChart.status).toBe(200);
+    expect(usageChart.headers.get('content-type')).toBe('text/javascript; charset=utf-8');
+    expect(await usageChart.text()).toContain('export function usageChartModel');
   });
 
   it('serves browser and Apple icons without authentication and with explicit image types', async () => {
@@ -170,6 +175,30 @@ describe('hardened HTTP API and local smoke journey', () => {
     }
     const independent = await login('root', '9999', { 'x-forwarded-for': '192.0.2.21' });
     expect(independent.response.status).toBe(200);
+  });
+
+  it('returns seven-day usage history only to superusers for each regular user', async () => {
+    store.db.prepare('INSERT INTO usage_sessions(id,user_id,device_id,day,started_at,accounted_at,ended_at,end_reason,seconds) VALUES(?,?,?,?,?,?,?,?,?)')
+      .run('history', 'kid', 'tv', '2026-07-30', 1, 3_601, 3_601, 'test', 3_600);
+    store.db.prepare('INSERT INTO ledger(user_id,day,seconds,session_id,created_at) VALUES(?,?,?,?,?)')
+      .run('kid', '2026-07-30', 3_600, 'history', 3_601);
+
+    const root = await login('root', '9999');
+    const adminStatus = await call('/api/status', { headers: { host: 'kidcontrol.test', cookie: root.cookie } });
+    const adminBody = await adminStatus.json() as { users: Array<{ id: string; usageLast7Days: Array<{ day: string; seconds: number }> }> };
+    expect(adminBody.users[0]?.usageLast7Days).toEqual([
+      { day: '2026-07-25', seconds: 0 },
+      { day: '2026-07-26', seconds: 0 },
+      { day: '2026-07-27', seconds: 0 },
+      { day: '2026-07-28', seconds: 0 },
+      { day: '2026-07-29', seconds: 0 },
+      { day: '2026-07-30', seconds: 3_600 },
+      { day: '2026-07-31', seconds: 0 }
+    ]);
+
+    const kid = await login();
+    const userStatus = await call('/api/status', { headers: { host: 'kidcontrol.test', cookie: kid.cookie } });
+    expect(await userStatus.json()).not.toHaveProperty('users');
   });
 
   it('returns 403 when a regular user targets a device reserved by a superuser', async () => {

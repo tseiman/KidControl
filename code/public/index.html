@@ -73,6 +73,16 @@
           <button id="adjust-submit" data-i18n="admin.setRemaining">Set remaining time</button>
         </form>
         <button id="restore" class="secondary wide" data-i18n="admin.restore">Restore network state</button>
+        <section id="usage-chart" class="usage-chart" aria-labelledby="usage-chart-title" hidden>
+          <h3 id="usage-chart-title" data-i18n="usage.title">Usage · last 7 days</h3>
+          <div class="usage-chart-body">
+            <div class="usage-axis" aria-hidden="true">
+              <span id="usage-axis-max">1 h</span>
+              <span>0</span>
+            </div>
+            <div id="usage-bars" class="usage-bars" role="list"></div>
+          </div>
+        </section>
       </section>
     </section>
   </main>

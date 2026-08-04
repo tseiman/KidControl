@@ -56,6 +56,7 @@ export class Store {
         id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, day TEXT NOT NULL CHECK(length(day)=10),
         seconds INTEGER NOT NULL CHECK(seconds>0), session_id TEXT NOT NULL REFERENCES usage_sessions(id), created_at INTEGER NOT NULL
       );
+      CREATE INDEX IF NOT EXISTS ledger_user_day ON ledger(user_id,day);
       CREATE TABLE IF NOT EXISTS adjustments(
         id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, day TEXT NOT NULL CHECK(length(day)=10),
         seconds INTEGER NOT NULL, author_id TEXT NOT NULL, created_at INTEGER NOT NULL
@@ -151,6 +152,11 @@ export class Store {
 
   usage(userId: string, day: string): number {
     return Number((this.db.prepare('SELECT COALESCE(SUM(seconds),0) total FROM ledger WHERE user_id=? AND day=?').get(userId, day) as { total: number | bigint }).total);
+  }
+  usageTotals(userId: string, firstDay: string, lastDay: string): Map<string, number> {
+    const rows = this.db.prepare(`SELECT day,COALESCE(SUM(seconds),0) seconds FROM ledger
+      WHERE user_id=? AND day BETWEEN ? AND ? GROUP BY day ORDER BY day`).all(userId, firstDay, lastDay) as unknown as Array<{ day: string; seconds: number | bigint }>;
+    return new Map(rows.map((row) => [row.day, Number(row.seconds)]));
   }
   adjustmentTotal(userId: string, day: string): number {
     return Number((this.db.prepare('SELECT COALESCE(SUM(seconds),0) total FROM adjustments WHERE user_id=? AND day=?').get(userId, day) as { total: number | bigint }).total);
