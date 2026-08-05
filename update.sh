@@ -95,7 +95,7 @@ npm audit --omit=dev
 [[ -f dist/version.txt ]] || die "Build did not create dist/version.txt."
 BUILT_REVISION=$(tr -d '\r\n' < dist/version.txt)
 [[ "$BUILT_REVISION" == "$REVISION" ]] || die "Built revision $BUILT_REVISION does not match $REVISION."
-[[ -f dist/main.js && -f dist/public/index.html && -f dist/documentation.md ]] || die "Build output is incomplete."
+[[ -f dist/main.js && -f dist/main.js.map && -f dist/public/index.html && -f dist/documentation.md ]] || die "Build output is incomplete."
 
 log "Pruning development dependencies"
 npm prune --omit=dev
@@ -115,11 +115,15 @@ SERVICE_STOPPED=1
 sudo rm -rf -- "$INSTALL_ROOT/dist" "$INSTALL_ROOT/node_modules"
 sudo cp -a code/dist code/node_modules code/package.json code/package-lock.json "$INSTALL_ROOT/"
 sudo chown -R root:root /opt/kidcontrol
+sudo chmod -R u=rwX,go=rX "$INSTALL_ROOT/dist" "$INSTALL_ROOT/node_modules"
+sudo chmod u=rw,go=r "$INSTALL_ROOT/package.json" "$INSTALL_ROOT/package-lock.json"
+sudo -u kidcontrol /usr/bin/env PATH=/usr/local/bin:/usr/bin:/bin node "$INSTALL_ROOT/dist/verify-source-maps.mjs" "$INSTALL_ROOT/dist"
 sudo install -o root -g root -m 0644 "$UNIT_SOURCE" "$UNIT_TARGET"
 sudo systemctl daemon-reload
 sudo systemctl start "$SERVICE"
 
 log "Verifying the update"
+sudo test -f "$INSTALL_ROOT/dist/main.js.map" || die "Installed source map is missing."
 INSTALLED_REVISION=$(tr -d '\r\n' < "$INSTALL_ROOT/dist/version.txt")
 [[ "$INSTALLED_REVISION" == "$REVISION" ]] || die "Installed revision does not match $REVISION."
 STARTUP_OK=0

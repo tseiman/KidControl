@@ -106,6 +106,9 @@ sudo install -d -o kidcontrol -g kidcontrol -m 0700 /var/lib/kidcontrol
 ```bash
 sudo cp -a code/dist code/node_modules code/package.json code/package-lock.json /opt/kidcontrol/code/
 sudo chown -R root:root /opt/kidcontrol
+sudo chmod -R u=rwX,go=rX /opt/kidcontrol/code/dist /opt/kidcontrol/code/node_modules
+sudo chmod u=rw,go=r /opt/kidcontrol/code/package.json /opt/kidcontrol/code/package-lock.json
+sudo -u kidcontrol /usr/bin/env PATH=/usr/local/bin:/usr/bin:/bin node /opt/kidcontrol/code/dist/verify-source-maps.mjs /opt/kidcontrol/code/dist
 ```
 
 ### 5. Install and edit the protected configuration
@@ -216,6 +219,8 @@ sudo journalctl -u kidcontrol.service -f -o short-iso-precise
 
 The first application line after every process start is the Git revision embedded during the build, for example `KidControl version 27b6a88`. A `-dirty` suffix means the build contained local changes that were not committed; `unknown` means `dist/version.txt` was not installed. Neither state is expected for a normal production update.
 
+Production builds install an external `.js.map` beside every compiled server-side JavaScript file. The maps embed their TypeScript source, and the systemd unit starts Node.js with `--enable-source-maps`; uncaught stack traces in the journal therefore identify the original `code/src/*.ts` file and line rather than only `dist/*.js`. `npm run build` recreates `dist/`, rejects missing, orphaned, malformed, incomplete, or symlinked map artifacts, and runs an end-to-end mapped-stack probe. Installation and update normalize the generated tree's read permissions, then repeat the complete map validation and stack probe as the `kidcontrol` service user before starting the service. The maps remain server-side under `/opt/kidcontrol/code/dist` and are not part of the WebUI static-file allowlist.
+
 The service binds to `127.0.0.1:8080` by default. Expose it only through the configured HTTPS reverse proxy.
 
 ## Updating KidControl
@@ -265,6 +270,9 @@ sudo systemctl stop kidcontrol.service
 sudo rm -rf /opt/kidcontrol/code/dist /opt/kidcontrol/code/node_modules
 sudo cp -a code/dist code/node_modules code/package.json code/package-lock.json /opt/kidcontrol/code/
 sudo chown -R root:root /opt/kidcontrol
+sudo chmod -R u=rwX,go=rX /opt/kidcontrol/code/dist /opt/kidcontrol/code/node_modules
+sudo chmod u=rw,go=r /opt/kidcontrol/code/package.json /opt/kidcontrol/code/package-lock.json
+sudo -u kidcontrol /usr/bin/env PATH=/usr/local/bin:/usr/bin:/bin node /opt/kidcontrol/code/dist/verify-source-maps.mjs /opt/kidcontrol/code/dist
 sudo install -o root -g root -m 0644 etc/kidcontrol.service /etc/systemd/system/kidcontrol.service
 sudo systemctl daemon-reload
 sudo systemctl start kidcontrol.service

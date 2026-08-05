@@ -10,7 +10,7 @@ Group=kidcontrol
 UMask=0077
 WorkingDirectory=/opt/kidcontrol/code
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
-ExecStart=/usr/bin/env node /opt/kidcontrol/code/dist/main.js
+ExecStart=/usr/bin/env node --enable-source-maps /opt/kidcontrol/code/dist/main.js
 EnvironmentFile=/etc/kidcontrol/kidcontrol.env
 StandardOutput=journal
 StandardError=journal

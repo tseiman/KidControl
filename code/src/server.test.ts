@@ -131,6 +131,19 @@ describe('hardened HTTP API and local smoke journey', () => {
     expect(await usageChart.text()).toContain('export function usageChartModel');
   });
 
+  it('never exposes server source maps through the WebUI allowlist', async () => {
+    const unauthenticated = await call('/main.js.map', { headers: { host: 'kidcontrol.test' } });
+    expect(unauthenticated.status).toBe(401);
+    expect(unauthenticated.headers.get('cache-control')).toBe('no-store');
+
+    const session = await login();
+    const authenticated = await call('/main.js.map', {
+      headers: { host: 'kidcontrol.test', cookie: session.cookie }
+    });
+    expect(authenticated.status).toBe(404);
+    expect(authenticated.headers.get('cache-control')).toBe('no-store');
+  });
+
   it('serves browser and Apple icons without authentication and with explicit image types', async () => {
     for (const [path, contentType] of [
       ['/favicon.ico', 'image/x-icon'],

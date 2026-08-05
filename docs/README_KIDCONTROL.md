@@ -258,7 +258,7 @@ Node.js writes safe single-line `key=value` events to stdout/stderr without a de
 
 The implementation uses:
 
-1. **Runtime:** TypeScript on Node.js `>=22.12.0`.
+1. **Runtime:** TypeScript on Node.js `>=22.12.0`; validated external source maps embed the TypeScript sources, and Node.js loads them in production so journal stack traces resolve to `src/*.ts`.
 2. **Persistence:** built-in `node:sqlite`, foreign keys, WAL, `synchronous=FULL`, a busy timeout, schema versioning, and restrictive file modes.
 3. **Web stack:** framework-light `node:http` with a dependency-free HTML/CSS/JavaScript frontend.
 4. **Apple TV:** `node-appletv-remote` directly from the maintained GitHub fork through `package.json`; no Python process or Git submodule.

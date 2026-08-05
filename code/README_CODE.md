@@ -39,7 +39,7 @@ Run the compiled application with:
 npm start
 ```
 
-`npm run build` copies `public/` into `dist/public`, writes the embedded revision to `dist/version.txt`, and copies `../docs/README_KIDCONTROL.md` to `dist/documentation.md`.
+`npm run build` first removes the complete generated `dist/` tree, then compiles every server-side TypeScript module with an external `.js.map` file and embeds the corresponding TypeScript in `sourcesContent`. It recursively validates every generated server JavaScript/map pair, rejects symlinks, unsupported entries, orphan maps, and semantically incomplete maps, and executes a real `--enable-source-maps` stack-trace probe. The verifier is copied into `dist/` so installation and update can repeat the same checks as the `kidcontrol` service user after final ownership and read permissions are applied. The build also copies `public/` into `dist/public`, writes the embedded revision to `dist/version.txt`, and copies `../docs/README_KIDCONTROL.md` to `dist/documentation.md`. Both `npm start` and the shipped systemd unit enable Node.js source-map support, so server exceptions refer to `src/*.ts` lines even though production installs only `dist/`.
 
 ## Environment
 

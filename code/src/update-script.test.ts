@@ -59,7 +59,18 @@ describe('production update script', () => {
 
   it('limits replacement to generated code and verifies the restarted service', () => {
     expect(script).toContain('sudo rm -rf -- "$INSTALL_ROOT/dist" "$INSTALL_ROOT/node_modules"');
-    expect(script).toContain('sudo cp -a code/dist code/node_modules code/package.json code/package-lock.json "$INSTALL_ROOT/"');
+    const copy = position('sudo cp -a code/dist code/node_modules code/package.json code/package-lock.json "$INSTALL_ROOT/"');
+    const ownership = position('sudo chown -R root:root /opt/kidcontrol');
+    const permissions = position('sudo chmod -R u=rwX,go=rX "$INSTALL_ROOT/dist" "$INSTALL_ROOT/node_modules"');
+    const sourceMapVerification = position('sudo -u kidcontrol /usr/bin/env PATH=/usr/local/bin:/usr/bin:/bin node "$INSTALL_ROOT/dist/verify-source-maps.mjs" "$INSTALL_ROOT/dist"');
+    const start = position('sudo systemctl daemon-reload\nsudo systemctl start "$SERVICE"');
+    expect(copy).toBeLessThan(ownership);
+    expect(ownership).toBeLessThan(permissions);
+    expect(permissions).toBeLessThan(sourceMapVerification);
+    expect(sourceMapVerification).toBeLessThan(start);
+    expect(script).toContain('dist/version.txt');
+    expect(script).toContain('dist/main.js.map');
+    expect(script).toContain('sudo test -f "$INSTALL_ROOT/dist/main.js.map"');
     expect(script).toContain('$INSTALL_ROOT/dist/version.txt');
     expect(script).toContain('systemctl is-active --quiet "$SERVICE"');
     expect(script).toContain('KidControl version $REVISION');
