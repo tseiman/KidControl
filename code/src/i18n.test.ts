@@ -27,6 +27,10 @@ describe('client-side WebUI localization', () => {
     expect(translate('en', 'usage.title')).toBe('Usage · last 7 days');
     expect(translate('de', 'usage.title')).toBe('Nutzung · letzte 7 Tage');
     expect(translate('de', 'usage.barLabel', { day: 'Fr', time: '01:02:03' })).toBe('Fr: 01:02:03 Nutzung');
+    expect(translate('en', 'error.loginLocked', { duration: '14:59' })).toBe('Sign-in is temporarily locked. Time remaining: 14:59.');
+    expect(translate('de', 'error.loginLocked', { duration: '14:59' })).toBe('Die Anmeldung ist vorübergehend gesperrt. Verbleibende Zeit: 14:59.');
+    expect(translate('de', 'error.loginLockedUnknown')).toBe('Die Anmeldung ist vorübergehend gesperrt. Die verbleibende Zeit ist nicht verfügbar.');
+    expect(translate('de', 'status.loginLockExpired')).toBe('Die Anmeldesperre ist abgelaufen. Du kannst es erneut versuchen.');
     expect(translate('en', 'network.degraded')).toBe('Degraded');
     expect(translate('de', 'network.degraded')).toBe('Eingeschränkt');
   });

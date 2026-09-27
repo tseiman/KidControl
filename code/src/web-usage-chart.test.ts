@@ -130,4 +130,19 @@ describe('regular-user seven-day usage chart', () => {
     expect(app).toContain('loginPending = false');
     expect(app).toMatch(/byId\('logout'\)\.onclick[\s\S]*const logoutRequest = api[\s\S]*clearAuthenticatedUi\(\)[\s\S]*await logoutRequest[\s\S]*sessionGeneration \+= 1/);
   });
+
+  it('shows the server login lock duration and permits an early retry after an administrator unlock', () => {
+    const app = asset('app.js');
+
+    expect(app).toContain("response.headers.get('retry-after')");
+    expect(app).toContain('error.retryAfterSeconds');
+    expect(app).toContain('function showLoginLock(retryAfterSeconds)');
+    expect(app).toContain("t('error.loginLocked', { duration:");
+    expect(app).toContain("t('error.loginLockedUnknown')");
+    expect(app).toContain("t('status.loginLockExpired')");
+    expect(app).toMatch(/error\.status === 429[\s\S]*showLoginLock\(error\.retryAfterSeconds\)/);
+    const lockFunction = app.slice(app.indexOf('function showLoginLock'), app.indexOf('function renderLoginUsers'));
+    expect(lockFunction).not.toContain('setLoginPending(true)');
+    expect(app).toMatch(/byId\('login-form'\)\.onsubmit[\s\S]*finally[\s\S]*setLoginPending\(false\)/);
+  });
 });

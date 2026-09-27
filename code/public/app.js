@@ -1,4 +1,4 @@
-import { canStart, initials } from './ui-model.js';
+import { canStart, formatLoginLockDuration, initials, parseRetryAfter } from './ui-model.js';
 import { applyTranslations, resolveLocale, translate } from './i18n.js';
 import { selectedUsageEntry, usageChartModel } from './usage-chart.js';
 
@@ -10,6 +10,8 @@ let state = null;
 let lastSync = Date.now();
 let sessionGeneration = 0;
 let loginPending = false;
+let loginLockDeadline = 0;
+let loginLockTimer;
 let publicUsers = [];
 let selectedLoginUserId = '';
 let adminUsers = [];
@@ -45,6 +47,7 @@ async function api(path, options = {}) {
     const value = await response.json().catch(() => ({ error: 'Request failed' }));
     const error = new Error(value.error);
     error.status = response.status;
+    error.retryAfterSeconds = parseRetryAfter(response.headers.get('retry-after'));
     throw error;
   }
   return response.status === 204 ? null : response.json();
@@ -78,6 +81,34 @@ function setLoginPending(pending) {
   byId('pin').disabled = pending;
   byId('login-submit').disabled = pending || !selectedLoginUserId;
   for (const button of byId('user-grid').querySelectorAll('button')) button.disabled = pending;
+}
+
+function clearLoginLock() {
+  if (loginLockTimer) clearInterval(loginLockTimer);
+  loginLockTimer = undefined;
+  loginLockDeadline = 0;
+}
+
+function showLoginLock(retryAfterSeconds) {
+  clearLoginLock();
+  if (!Number.isSafeInteger(retryAfterSeconds) || retryAfterSeconds <= 0) {
+    note(t('error.loginLockedUnknown'), true);
+    return;
+  }
+  loginLockDeadline = Date.now() + retryAfterSeconds * 1000;
+  const render = () => {
+    const remaining = Math.max(0, Math.ceil((loginLockDeadline - Date.now()) / 1000));
+    if (remaining === 0) {
+      clearInterval(loginLockTimer);
+      loginLockTimer = undefined;
+      loginLockDeadline = 0;
+      note(t('status.loginLockExpired'));
+      return;
+    }
+    note(t('error.loginLocked', { duration: formatLoginLockDuration(remaining) }), true);
+  };
+  render();
+  loginLockTimer = setInterval(render, 1000);
 }
 
 function renderLoginUsers(users) {
@@ -377,11 +408,17 @@ byId('login-form').onsubmit = async (event) => {
       body: JSON.stringify({ userId: selectedLoginUserId, pin: byId('pin').value })
     });
     if (expectedGeneration !== sessionGeneration) return;
+    clearLoginLock();
     csrf = result.csrf;
     byId('pin').value = '';
     await refresh(expectedGeneration);
   } catch (error) {
-    if (expectedGeneration === sessionGeneration) note(localizedError(error.message), true);
+    if (expectedGeneration === sessionGeneration && error.status === 429) {
+      showLoginLock(error.retryAfterSeconds);
+    } else if (expectedGeneration === sessionGeneration) {
+      clearLoginLock();
+      note(localizedError(error.message), true);
+    }
   } finally {
     if (expectedGeneration === sessionGeneration) setLoginPending(false);
   }

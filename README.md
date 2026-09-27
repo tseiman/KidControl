@@ -7,6 +7,7 @@
 - [Status](#status)
 - [Default installation](#default-installation)
 - [Updating KidControl](#updating-kidcontrol)
+- [Clearing login throttles](#clearing-login-throttles)
 - [Safety semantics](#safety-semantics)
 - [License](#license)
 
@@ -283,6 +284,19 @@ sudo journalctl -u kidcontrol.service -n 50 --no-pager -o short-iso-precise
 Confirm that the current startup output contains `KidControl version` followed by the short revision just pulled and that the same revision appears below the **Documentation** link in the WebUI. This proves that systemd and the browser loaded the newly built application rather than an older `/opt/kidcontrol` copy. If only the browser still shows old assets, perform a hard reload; favicons and Apple home-screen icons may remain cached separately.
 
 Do not replace `/etc/kidcontrol/config.json`, `/etc/kidcontrol/kidcontrol.env`, `/etc/kidcontrol/.atv-credentials.json`, `/etc/kidcontrol/icons`, or `/var/lib/kidcontrol/state.sqlite` during a normal update. Review new example files in Git manually if a release documents a configuration change.
+
+## Clearing login throttles
+
+Five failed sign-in attempts within 15 minutes temporarily block the affected user and source address. The WebUI distinguishes this HTTP `429` response from an incorrect user/PIN response and shows a live `MM:SS` countdown based on the server's `Retry-After` header.
+
+An administrator with SSH and root access can remove all login-throttle records before they expire:
+
+```bash
+cd ~/KidControl
+sudo ./unlock-login.sh
+```
+
+The script accepts only the canonical production path `/var/lib/kidcontrol/state.sqlite`, rejects symbolic-link path components, requires the active systemd service to run as `kidcontrol`, verifies the database owner, schema version, exact `auth_attempts` columns, and absence of triggers, then performs one bounded SQLite transaction as the service user. It deletes only `auth_attempts`; users, PINs, authenticated sessions, usage accounting, claims, and device state remain unchanged. The service stays running and does not need to be restarted. Running the script when no throttle records exist is safe and reports that zero records were removed.
 
 ## Safety semantics
 
