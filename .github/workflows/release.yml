@@ -37,6 +37,7 @@ jobs:
         working-directory: code
         run: |
           set -euo pipefail
+          npm config set allow-git root --location=project
           npm ci
           npm test
           npm run build

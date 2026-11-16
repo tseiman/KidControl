@@ -18,7 +18,8 @@ This document is for maintainers. Operators should follow the package installati
 Before a tag exists, the explicit test-only override can build the intended version from a dirty implementation tree:
 
 The builder requires Node.js 22.22.3 and npm 12.0.2. GitHub Actions pins both
-versions before running it.
+versions before running it. npm 12's Git-dependency allow-list is enabled only
+for the required `node-appletv-remote` installation.
 
 ```bash
 PACKAGE_TEST_MODE=1 \

@@ -62,7 +62,7 @@ describe('tagged release workflow contract', () => {
 
   it('runs only for version tags and validates before publishing', () => {
     expect(workflow).toContain('"v[0-9]*"');
-    expect(workflow).not.toContain('npm config set allow-git');
+    expect(workflow).toContain('npm config set allow-git root --location=project');
     expect(workflow.match(/npm install --global npm@12\.0\.2/g)).toHaveLength(2);
     expect(workflow).toContain('npm ci');
     expect(workflow).toContain('npm test');

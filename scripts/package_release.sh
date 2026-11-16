@@ -67,6 +67,7 @@ DEB_PATH="$OUTPUT_DIR/kidcontrol_${VERSION}_amd64.deb"
 log "installing and testing the exact source dependency graph"
 (
   cd "$CODE_DIR"
+  npm config set allow-git root --location=project
   npm ci
   npm test
   npm run build
@@ -79,6 +80,7 @@ DEPS_DIR="$(mktemp -d "${PACKAGE_TMPDIR:-${TMPDIR:-/tmp}}/kidcontrol-deps.XXXXXX
 install -m 0644 "$CODE_DIR/package.json" "$CODE_DIR/package-lock.json" "$DEPS_DIR/"
 (
   cd "$DEPS_DIR"
+  npm config set allow-git root --location=project
   npm ci --omit=dev
   npm audit --omit=dev
 )
