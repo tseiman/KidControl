@@ -93,7 +93,7 @@ Pairing is a mandatory installation step. Every physical Apple TV must be paired
 
 ```bash
 sudo -u kidcontrol env HOME=/etc/kidcontrol \
-  /opt/kidcontrol/code/node_modules/.bin/atv companion-pair
+  /usr/bin/kidcontrol-atv companion-pair
 ```
 
 Select one device, enter the PIN shown on that Apple TV, wait for `Companion paired!`, and repeat for the next device. The shared `HOME` makes the CLI safely update `/etc/kidcontrol/.atv-credentials.json`; set `APPLETV_CREDENTIALS` to that path. Use each map key exactly as the matching `appleTvIdentifier`. AirPlay pairing with `atv pair` is not required. See the [configuration quick guide](../config/README_CONFIGURATION.md) for safe ID listing and read-only power verification.

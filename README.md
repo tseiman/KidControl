@@ -7,6 +7,7 @@
 - [Status](#status)
 - [Default installation](#default-installation)
 - [Updating KidControl](#updating-kidcontrol)
+- [Source installation alternative](#source-installation-alternative)
 - [Clearing login throttles](#clearing-login-throttles)
 - [Safety semantics](#safety-semantics)
 - [License](#license)
@@ -23,7 +24,7 @@
 
 - **Recommended VM:** 1 vCPU, 512 MiB RAM, 1 GiB free disk
 - **Measured service footprint:** about 80 MiB idle RSS, effectively 0% idle CPU, 1.5 MiB built application including WebUI icons, about 180 KiB initial SQLite state
-- **Software:** x86-64 Debian 12/13, Node.js `>=22.12.0`, npm, Git, systemd, and an HTTPS reverse proxy
+- **Software:** x86-64 Debian 12/13, systemd, and an HTTPS reverse proxy; the package bundles Node.js
 - **External requirements:** UniFi Network Integration API, one uniquely named blocking ACL per Apple TV, and paired Companion credentials
 
 The recommendation includes reserve for Debian, the TLS proxy, production dependencies, SQLite growth, and the systemd journal. The measurement used the built production modules with local fake UniFi and Apple TV adapters; no real LAN device was contacted.
@@ -50,240 +51,99 @@ Automated tests use fake external adapters and never contact live UniFi or Apple
 
 ## Default installation
 
-This is the supported default path: build from the repository, install under `/opt/kidcontrol`, store configuration under `/etc/kidcontrol`, and run the service as the dedicated `kidcontrol` user.
+The recommended installation is the signed APT package for x86-64 Debian 12
+(Bookworm) or Debian 13 (Trixie). The package includes the official Node.js
+22.22.3 x64 runtime, so a system Node.js or npm installation is not required.
 
-### 1. Install Node.js, npm, and Git
+### 1. Register the signed repository
 
-The commands below install the tested official Node.js `22.22.3` x86-64 archive under `/usr/local/lib/nodejs`. The download is about 31 MB and is verified against Node.js's published SHA-256 file.
+Download the key and verify its fingerprint before installing it. Stop if the
+fingerprint differs from `FBB4 E68D ABB4 A25F 6E73 C81D D4EA 266E 8BC8 043F`.
 
 ```bash
-sudo apt update
-sudo apt install -y ca-certificates curl git xz-utils
-cd /tmp
-curl -fsSLO https://nodejs.org/dist/v22.22.3/node-v22.22.3-linux-x64.tar.xz
-curl -fsSLO https://nodejs.org/dist/v22.22.3/SHASUMS256.txt
-grep ' node-v22.22.3-linux-x64.tar.xz$' SHASUMS256.txt | sha256sum -c -
-sudo install -d -m 0755 /usr/local/lib/nodejs
-sudo tar -xJf node-v22.22.3-linux-x64.tar.xz -C /usr/local/lib/nodejs
-sudo ln -sfn /usr/local/lib/nodejs/node-v22.22.3-linux-x64/bin/node /usr/local/bin/node
-sudo ln -sfn /usr/local/lib/nodejs/node-v22.22.3-linux-x64/bin/npm /usr/local/bin/npm
-sudo ln -sfn /usr/local/lib/nodejs/node-v22.22.3-linux-x64/bin/npx /usr/local/bin/npx
-sudo /usr/local/bin/npm install --global npm@11.18.0
-rm node-v22.22.3-linux-x64.tar.xz SHASUMS256.txt
-node --version
-npm --version
-git --version
+curl --fail --location --output apt-repo.asc https://tseiman.github.io/apt-repro/apt-repo.asc
+gpg --show-keys --fingerprint apt-repo.asc
 ```
 
-### 2. Clone, build, and test KidControl
-
-Start in the home directory in which the repository should be checked out:
+Set the suite to `bookworm` on Debian 12 or `trixie` on Debian 13:
 
 ```bash
-git clone https://github.com/tseiman/KidControl.git
-cd KidControl/code
-npm config set allow-git root --location=project
-npm ci
-npm test
-npm run build
-npm prune --omit=dev
-cd ..
+. /etc/os-release
+case "$VERSION_CODENAME" in bookworm|trixie) suite="$VERSION_CODENAME" ;; *) echo "Unsupported Debian release" >&2; exit 1 ;; esac
+sudo install -d -m 0755 /etc/apt/keyrings
+sudo install -m 0644 apt-repo.asc /etc/apt/keyrings/tseiman-apt-repro.asc
+printf 'Types: deb\nURIs: https://tseiman.github.io/apt-repro/\nSuites: %s\nComponents: main\nSigned-By: /etc/apt/keyrings/tseiman-apt-repro.asc\n' "$suite" | sudo tee /etc/apt/sources.list.d/tseiman-apt-repro.sources >/dev/null
+sudo apt-get update
+apt-cache policy kidcontrol
+sudo apt-get install kidcontrol
 ```
 
-The Node.js archive includes npm 10, so the installation upgrades it to the tested npm `11.18.0` before configuring Git-source policy. `node-appletv-remote` is an intentional direct GitHub dependency pinned by `package-lock.json`. `allow-git=root` permits that direct dependency while leaving transitive Git dependencies blocked. The package manifest separately approves only the pinned `node-appletv-remote` `prepare` script and the pinned `esbuild` build-helper script required by the tested build.
+Installation creates protected defaults only when they are missing. It does not
+enable, start, or restart `kidcontrol.service`.
 
-### 3. Create the service account and directories
+### 2. Configure and pair
 
-```bash
-sudo useradd --system --home-dir /var/lib/kidcontrol --shell /usr/sbin/nologin kidcontrol
-sudo install -d -o root -g root -m 0755 /opt/kidcontrol/code
-sudo install -d -o kidcontrol -g kidcontrol -m 0700 /etc/kidcontrol
-sudo install -d -o root -g kidcontrol -m 0750 /etc/kidcontrol/icons
-sudo install -d -o kidcontrol -g kidcontrol -m 0700 /var/lib/kidcontrol
-```
-
-### 4. Install the application
+Edit `/etc/kidcontrol/config.json` and `/etc/kidcontrol/kidcontrol.env`; replace
+every example value. See the [configuration guide](config/README_CONFIGURATION.md)
+for the schema, proxy/TLS contract, icons, and certificate handling.
 
 ```bash
-sudo cp -a code/dist code/node_modules code/package.json code/package-lock.json /opt/kidcontrol/code/
-sudo chown -R root:root /opt/kidcontrol
-sudo chmod -R u=rwX,go=rX /opt/kidcontrol/code/dist /opt/kidcontrol/code/node_modules
-sudo chmod u=rw,go=r /opt/kidcontrol/code/package.json /opt/kidcontrol/code/package-lock.json
-sudo -u kidcontrol /usr/bin/env PATH=/usr/local/bin:/usr/bin:/bin node /opt/kidcontrol/code/dist/verify-source-maps.mjs /opt/kidcontrol/code/dist
-```
-
-### 5. Install and edit the protected configuration
-
-```bash
-sudo install -o kidcontrol -g kidcontrol -m 0600 config/config.example.json /etc/kidcontrol/config.json
-sudo install -o root -g root -m 0600 code/.env.example /etc/kidcontrol/kidcontrol.env
 sudo mcedit /etc/kidcontrol/config.json
 sudo mcedit /etc/kidcontrol/kidcontrol.env
 ```
 
-Replace every dummy user, PIN, budget, ACL name, Apple TV identifier, path, origin, site ID, and API key.
-
-Generate the required independent authentication pepper once and copy it into `KIDCONTROL_AUTH_PEPPER` in the protected environment file:
-
-```bash
-openssl rand -hex 32
-```
-
-Do not commit or share the resulting pepper, UniFi API key, PINs, cookie tokens, or Companion credentials.
-
-#### Optional user avatars
-
-Each regular user or superuser can have an optional portrait in the login tile grid. The superuser target picker additionally shows portraits for its regular-user targets. Add a simple filename to that user's object in `/etc/kidcontrol/config.json`:
-
-```json
-{
-  "icon": "anna.webp"
-}
-```
-
-Store the corresponding file outside Git under `/etc/kidcontrol/icons`:
-
-```bash
-sudo install -d -o root -g kidcontrol -m 0750 /etc/kidcontrol/icons
-sudo install -o root -g kidcontrol -m 0640 /path/to/anna.webp /etc/kidcontrol/icons/anna.webp
-```
-
-Accepted filename extensions are `.png`, `.jpg`, `.jpeg`, and `.webp`, and each file may be up to 5 MiB. The value must be a plain filename beginning with a letter or digit; the remaining base-name characters may be letters, digits, dots, underscores, or hyphens. Directory separators, leading dots, SVG extensions, and symlinks are rejected. Administrators must ensure that the file content matches its extension. KidControl serves the image only through the public, unauthenticated `/api/user-icons/<user-id>` route because portraits are required on the login screen. Rectangular images are center-cropped into a circle without modifying the source file; omitted or unreadable images fall back to safe initials. Restart KidControl after changing `config.json`. See the [configuration quick guide](config/README_CONFIGURATION.md#user-icons) for the full rules.
-
-#### Certificate files
-
-If the UniFi controller uses a certificate from a publicly trusted CA and sends its intermediate certificate correctly, leave `UNIFI_CA_FILE` empty. Node.js then uses its normal public trust store.
-
-Only for a private/internal CA, create `/etc/kidcontrol/unifi-ca.pem` with the issuing intermediate CA certificate first and the root CA certificate second. It must contain CA certificates only—no UniFi leaf certificate and no private key:
-
-```bash
-sudo mcedit /etc/kidcontrol/unifi-ca.pem
-sudo chown kidcontrol:kidcontrol /etc/kidcontrol/unifi-ca.pem
-sudo chmod 0600 /etc/kidcontrol/unifi-ca.pem
-```
-
-Then set `UNIFI_CA_FILE=/etc/kidcontrol/unifi-ca.pem`.
-
-The HTTPS reverse proxy needs different files: `/etc/nginx/ssl/kidcontrol.fullchain.pem` containing the KidControl host's leaf certificate followed by its intermediate certificate(s), plus the matching private key at `/etc/nginx/ssl/kidcontrol.key`. Do not append the public root certificate to the served full chain. A root and intermediate certificate alone are insufficient; the host-specific leaf certificate and its private key are also required.
-
-```bash
-sudo install -d -o root -g root -m 0750 /etc/nginx/ssl
-sudo mcedit /etc/nginx/ssl/kidcontrol.fullchain.pem
-sudo mcedit /etc/nginx/ssl/kidcontrol.key
-sudo chown root:root /etc/nginx/ssl/kidcontrol.fullchain.pem /etc/nginx/ssl/kidcontrol.key
-sudo chmod 0644 /etc/nginx/ssl/kidcontrol.fullchain.pem
-sudo chmod 0600 /etc/nginx/ssl/kidcontrol.key
-```
-
-Reference them in the Nginx TLS server with `ssl_certificate` and `ssl_certificate_key`.
-
-### 6. Pair every Apple TV
-
-Each physical Apple TV requires its own one-time Companion pairing. Keep KidControl stopped and run this command once for each Apple TV:
+With the service stopped, pair each physical Apple TV separately:
 
 ```bash
 sudo -u kidcontrol env HOME=/etc/kidcontrol \
-  /opt/kidcontrol/code/node_modules/.bin/atv companion-pair
+  /usr/bin/kidcontrol-atv companion-pair
 ```
 
-Select exactly one Apple TV and enter the PIN displayed on that device. Repeat the command for every configured Apple TV. The CLI updates `/etc/kidcontrol/.atv-credentials.json` and protects it with mode `0600`. AirPlay pairing with `atv pair` is not required by KidControl.
+The CLI preserves all paired devices in
+`/etc/kidcontrol/.atv-credentials.json`. Copy each exact top-level device ID to
+its `appleTvIdentifier`; do not substitute the display name or guess a network
+address.
 
-Copy each credential map's top-level device ID into the matching `appleTvIdentifier` in `/etc/kidcontrol/config.json`. This identifier often looks like a MAC address such as `AA:BB:CC:DD:EE:FF`; it is not the Apple TV name such as `Wohnzimmer`. Do not guess it from UniFi Ethernet or Wi-Fi addresses—copy the exact, case-sensitive top-level key written by `companion-pair`. The [configuration quick guide](config/README_CONFIGURATION.md) includes a safe command that prints only these IDs and a read-only power-state verification.
+### 3. Enable and verify
 
-The HTTPS reverse proxy must preserve the public host and overwrite the client address with exactly one value:
-
-```nginx
-proxy_set_header Host $http_host;
-proxy_set_header X-Forwarded-For $remote_addr;
-```
-
-Set `TRUSTED_PROXY_IP` to the proxy address as seen by KidControl. `PUBLIC_ORIGIN` and `UNIFI_HOST` must both use HTTPS.
-
-### 7. Install and start the systemd service
-
-The checked-in unit is [`etc/kidcontrol.service`](etc/kidcontrol.service).
+Only after configuration and pairing are complete:
 
 ```bash
-sudo install -o root -g root -m 0644 etc/kidcontrol.service /etc/systemd/system/kidcontrol.service
-sudo systemctl daemon-reload
 sudo systemctl enable --now kidcontrol.service
-sudo systemctl status --no-pager kidcontrol.service
-```
-
-The unit sends application stdout, stderr, structured operational events, and systemd lifecycle messages to the standard systemd journal. KidControl does not create or use separate files under `/var/log/kidcontrol`.
-
-Follow application output and errors with timestamps using:
-
-```bash
-sudo journalctl -u kidcontrol.service -f -o short-iso-precise
-```
-
-The first application line after every process start is the Git revision embedded during the build, for example `KidControl version 27b6a88`. A `-dirty` suffix means the build contained local changes that were not committed; `unknown` means `dist/version.txt` was not installed. Neither state is expected for a normal production update.
-
-Production builds install an external `.js.map` beside every compiled server-side JavaScript file. The maps embed their TypeScript source, and the systemd unit starts Node.js with `--enable-source-maps`; uncaught stack traces in the journal therefore identify the original `code/src/*.ts` file and line rather than only `dist/*.js`. `npm run build` recreates `dist/`, rejects missing, orphaned, malformed, incomplete, or symlinked map artifacts, and runs an end-to-end mapped-stack probe. Installation and update normalize the generated tree's read permissions, then repeat the complete map validation and stack probe as the `kidcontrol` service user before starting the service. The maps remain server-side under `/opt/kidcontrol/code/dist` and are not part of the WebUI static-file allowlist.
-
-The service binds to `127.0.0.1:8080` by default. Expose it only through the configured HTTPS reverse proxy.
-
-## Updating KidControl
-
-Run the checked-in update script from the repository root. It supports being run directly as `root`; on a multi-user installation it can also run as the checkout user and request `sudo` for protected deployment steps.
-
-```bash
-cd ~/KidControl
-./update.sh
-```
-
-The script checks the clean `main` checkout, Node.js version, active service, protected configuration/state paths, and systemd unit. It then pulls with `--ff-only`, installs dependencies, runs all tests, builds, audits production dependencies, verifies the embedded revision, and prunes development dependencies before it stops the service.
-
-After confirmation, it replaces only `/opt/kidcontrol/code/dist` and `/opt/kidcontrol/code/node_modules`, installs the package files and systemd unit, restarts KidControl, and checks both the active service and matching revision in the journal for the current systemd invocation. It does not modify `/etc/kidcontrol` or `/var/lib/kidcontrol`. If an install command fails after the stop, it attempts to start the service again.
-
-To skip only the final confirmation, use:
-
-```bash
-./update.sh --yes
-```
-
-All safety, build, test, and revision checks still run.
-
-### Manual update fallback
-
-The equivalent manual procedure remains available for recovery or diagnosis. The first status command must produce no output. If it lists local changes, resolve them before continuing; do not overwrite them with an update.
-
-```bash
-cd ~/KidControl
-git status --short
-git pull --ff-only
-cd code
-npm config set allow-git root --location=project
-npm ci
-npm test
-npm run build
-npm prune --omit=dev
-cd ..
-```
-
-Only after the new revision has built and passed all tests, stop the service and install it.
-
-**The following removal is intentionally limited to generated application code and dependencies under `/opt/kidcontrol/code`. It does not remove `/etc/kidcontrol` configuration, Apple TV credentials, or `/var/lib/kidcontrol` SQLite state.**
-
-```bash
-sudo systemctl stop kidcontrol.service
-sudo rm -rf /opt/kidcontrol/code/dist /opt/kidcontrol/code/node_modules
-sudo cp -a code/dist code/node_modules code/package.json code/package-lock.json /opt/kidcontrol/code/
-sudo chown -R root:root /opt/kidcontrol
-sudo chmod -R u=rwX,go=rX /opt/kidcontrol/code/dist /opt/kidcontrol/code/node_modules
-sudo chmod u=rw,go=r /opt/kidcontrol/code/package.json /opt/kidcontrol/code/package-lock.json
-sudo -u kidcontrol /usr/bin/env PATH=/usr/local/bin:/usr/bin:/bin node /opt/kidcontrol/code/dist/verify-source-maps.mjs /opt/kidcontrol/code/dist
-sudo install -o root -g root -m 0644 etc/kidcontrol.service /etc/systemd/system/kidcontrol.service
-sudo systemctl daemon-reload
-sudo systemctl start kidcontrol.service
 sudo systemctl status --no-pager kidcontrol.service
 sudo journalctl -u kidcontrol.service -n 50 --no-pager -o short-iso-precise
 ```
 
-Confirm that the current startup output contains `KidControl version` followed by the short revision just pulled and that the same revision appears below the **Documentation** link in the WebUI. This proves that systemd and the browser loaded the newly built application rather than an older `/opt/kidcontrol` copy. If only the browser still shows old assets, perform a hard reload; favicons and Apple home-screen icons may remain cached separately.
+The service binds to `127.0.0.1:8080` by default and must be exposed only through
+the configured HTTPS reverse proxy. Logs go only to the systemd journal.
 
-Do not replace `/etc/kidcontrol/config.json`, `/etc/kidcontrol/kidcontrol.env`, `/etc/kidcontrol/.atv-credentials.json`, `/etc/kidcontrol/icons`, or `/var/lib/kidcontrol/state.sqlite` during a normal update. Review new example files in Git manually if a release documents a configuration change.
+## Updating KidControl
+
+```bash
+sudo apt-get update
+apt-cache policy kidcontrol
+sudo apt-get install --only-upgrade kidcontrol
+sudo systemctl restart kidcontrol.service
+sudo systemctl status --no-pager kidcontrol.service
+```
+
+Upgrades preserve `/etc/kidcontrol` (including configuration, environment,
+Apple TV credentials, CA files, and icons) and `/var/lib/kidcontrol` (including
+the SQLite database). Package installation deliberately leaves an already
+running service on its current process until the operator validates the update
+and restarts it.
+
+## Source installation alternative
+
+Developers may still build from Git using Node.js `>=22.12.0`, `npm ci`,
+`npm test`, and `npm run build`. The legacy source deployment uses
+`/opt/kidcontrol`; package deployments use `/usr/lib/kidcontrol` and the packaged
+unit. **Do not mix source and package layouts or copy the source unit over the
+package unit.** Choose one installation method. Existing source operators should
+stop the service, remove any full unit override under `/etc/systemd/system`, and
+then install/configure the package before enabling it. The source-only update
+script remains available for installations that intentionally stay on the Git
+layout.
 
 ## Clearing login throttles
 

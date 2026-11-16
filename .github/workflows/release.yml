@@ -1,0 +1,166 @@
+name: Tagged release
+
+on:
+  push:
+    tags:
+      - "v[0-9]*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Verify exact tagged source
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Require the exact pushed version tag
+        run: |
+          set -euo pipefail
+          test "$(git describe --tags --exact-match HEAD)" = "${GITHUB_REF_NAME}"
+          ./scripts/package_release.sh --validate-version "${GITHUB_REF_NAME}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.3
+          cache: npm
+          cache-dependency-path: code/package-lock.json
+      - name: Test, build, and audit
+        working-directory: code
+        run: |
+          set -euo pipefail
+          npm config set allow-git root --location=project
+          npm ci
+          npm test
+          npm run build
+          npm audit --omit=dev
+
+  package:
+    name: Build and validate amd64 package
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.3
+          cache: npm
+          cache-dependency-path: code/package-lock.json
+      - name: Build Debian package
+        run: ./scripts/package_release.sh amd64
+      - name: Inspect package and checksum
+        run: ./scripts/test_debian_package.sh "kidcontrol_${GITHUB_REF_NAME#v}_amd64.deb"
+      - name: Install, upgrade, remove, and reinstall on supported Debian releases
+        run: |
+          set -euo pipefail
+          for suite in bookworm trixie; do
+            docker run --rm --volume "$PWD:/src:ro" "debian:${suite}-slim" \
+              /bin/bash /src/scripts/test_debian_install.sh "/src/kidcontrol_${GITHUB_REF_NAME#v}_amd64.deb"
+          done
+      - name: Record tested release identity
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          deb="kidcontrol_${version}_amd64.deb"
+          sha256sum -c "${deb}.sha256"
+          printf 'commit=%s\nversion=%s\npackage_sha256=%s\n' \
+            "$GITHUB_SHA" "$version" "$(sha256sum "$deb" | cut -d ' ' -f 1)" \
+            > release-manifest.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kidcontrol-amd64
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            kidcontrol_*.deb
+            kidcontrol_*.deb.sha256
+            release-manifest.txt
+
+  release:
+    name: Publish GitHub release
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/download-artifact@v4
+        with:
+          name: kidcontrol-amd64
+          path: release-assets
+      - name: Verify exact release identity and publish transactionally
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${TAG_NAME#v}"
+          deb="kidcontrol_${version}_amd64.deb"
+          sidecar="${deb}.sha256"
+          cd release-assets
+          expected_files="$(printf '%s\n' "$deb" "$sidecar" release-manifest.txt | sort)"
+          actual_files="$(find . -maxdepth 1 -type f -printf '%f\n' | sort)"
+          test "$actual_files" = "$expected_files"
+          sha256sum -c "$sidecar"
+          test "$(dpkg-deb -f "$deb" Package)" = kidcontrol
+          test "$(dpkg-deb -f "$deb" Version)" = "$version"
+          test "$(dpkg-deb -f "$deb" Architecture)" = amd64
+          grep -qx "commit=$GITHUB_SHA" release-manifest.txt
+          grep -qx "version=$version" release-manifest.txt
+          grep -qx "package_sha256=$(sha256sum "$deb" | cut -d ' ' -f 1)" release-manifest.txt
+
+          check_ref="refs/tags/${TAG_NAME}-release-check"
+          git -C .. fetch --no-tags --force origin "refs/tags/${TAG_NAME}:${check_ref}"
+          test "$(git -C .. rev-parse "${check_ref}^{commit}")" = "$GITHUB_SHA"
+
+          release_state=missing
+          if draft="$(gh api "repos/${GH_REPO}/releases/tags/${TAG_NAME}" --jq .draft 2>/dev/null)"; then
+            if test "$draft" = true; then release_state=draft; else release_state=published; fi
+          fi
+          if test "$release_state" = missing; then
+            gh release create "$TAG_NAME" --draft --verify-tag --generate-notes --title "$TAG_NAME"
+            release_state=draft
+          fi
+          if test "$release_state" = draft; then
+            gh release upload "$TAG_NAME" "$deb" "$sidecar" --clobber
+          fi
+
+          expected_assets="$(printf '%s\n' "$deb" "$sidecar" | sort)"
+          actual_assets="$(gh api "repos/${GH_REPO}/releases/tags/${TAG_NAME}" --jq '.assets[].name' | sort)"
+          test "$actual_assets" = "$expected_assets"
+          mkdir verified-download
+          gh release download "$TAG_NAME" --dir verified-download --pattern "$deb" --pattern "$sidecar"
+          (cd verified-download && sha256sum -c "$sidecar")
+          cmp "$deb" "verified-download/$deb"
+          cmp "$sidecar" "verified-download/$sidecar"
+          if test "$release_state" = draft; then
+            gh release edit "$TAG_NAME" --draft=false
+          fi
+          test "$(gh api "repos/${GH_REPO}/releases/tags/${TAG_NAME}" --jq .draft)" = false
+
+  refresh-apt-repository:
+    name: Trigger central APT repository
+    needs: release
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Dispatch archive rebuild
+        env:
+          GH_TOKEN: ${{ secrets.APT_REPO_DISPATCH_TOKEN }}
+        run: |
+          set -euo pipefail
+          : "${GH_TOKEN:?Missing repository secret APT_REPO_DISPATCH_TOKEN}"
+          gh api --method POST repos/tseiman/apt-repro/dispatches \
+            -f event_type=apt-release-published

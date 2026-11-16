@@ -20,7 +20,9 @@ describe('production source maps', () => {
 
   it('enables Node source-map stack traces for both supported production start paths', () => {
     expect(packageJson.scripts.start).toBe('node --enable-source-maps dist/main.js');
-    expect(unit).toContain('ExecStart=/usr/bin/env node --enable-source-maps /opt/kidcontrol/code/dist/main.js');
+    expect(unit).toContain(
+      'ExecStart=/usr/bin/env node --enable-source-maps /opt/kidcontrol/code/dist/main.js',
+    );
   });
 
   it('runs an end-to-end mapped-stack verification after generating build assets', () => {

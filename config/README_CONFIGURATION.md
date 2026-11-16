@@ -129,7 +129,7 @@ Run the following command once for each Apple TV:
 
 ```bash
 sudo -u kidcontrol env HOME=/etc/kidcontrol \
-  /opt/kidcontrol/code/node_modules/.bin/atv companion-pair
+  /usr/bin/kidcontrol-atv companion-pair
 ```
 
 For each run:
@@ -145,7 +145,7 @@ The CLI creates or updates `/etc/kidcontrol/.atv-credentials.json` as a device-k
 Print only the paired device IDs, without displaying credential material:
 
 ```bash
-sudo -u kidcontrol /usr/bin/node -e \
+sudo -u kidcontrol /usr/lib/kidcontrol/node/bin/node -e \
   "const fs=require('node:fs');const p='/etc/kidcontrol/.atv-credentials.json';console.log(Object.keys(JSON.parse(fs.readFileSync(p,'utf8'))).join('\\n'))"
 ```
 
@@ -156,7 +156,7 @@ Optionally verify one device with a read-only Companion power-state query. The f
 ```bash
 read -r -p "Exact paired Apple TV identifier: " ATV_ID
 sudo -u kidcontrol env HOME=/etc/kidcontrol \
-  /opt/kidcontrol/code/node_modules/.bin/atv power "$ATV_ID"
+  /usr/bin/kidcontrol-atv power "$ATV_ID"
 unset ATV_ID
 ```
 
