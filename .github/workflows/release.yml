@@ -134,25 +134,25 @@ jobs:
             if test "$draft" = true; then release_state=draft; else release_state=published; fi
           fi
           if test "$release_state" = missing; then
-            gh release create "$TAG_NAME" --draft --verify-tag --generate-notes --title "$TAG_NAME"
+            gh release create "$TAG_NAME" "$deb" "$sidecar" \
+              --draft --verify-tag --generate-notes --title "$TAG_NAME"
             release_state=draft
-          fi
-          if test "$release_state" = draft; then
+          elif test "$release_state" = draft; then
             gh release upload "$TAG_NAME" "$deb" "$sidecar" --clobber
           fi
 
           expected_assets="$(printf '%s\n' "$deb" "$sidecar" | sort)"
           actual_assets="$(gh api "repos/${GH_REPO}/releases/tags/${TAG_NAME}" --jq '.assets[].name' | sort)"
           test "$actual_assets" = "$expected_assets"
+          if test "$release_state" = draft; then
+            gh release edit "$TAG_NAME" --draft=false
+          fi
+          test "$(gh api "repos/${GH_REPO}/releases/tags/${TAG_NAME}" --jq .draft)" = false
           mkdir verified-download
           gh release download "$TAG_NAME" --dir verified-download --pattern "$deb" --pattern "$sidecar"
           (cd verified-download && sha256sum -c "$sidecar")
           cmp "$deb" "verified-download/$deb"
           cmp "$sidecar" "verified-download/$sidecar"
-          if test "$release_state" = draft; then
-            gh release edit "$TAG_NAME" --draft=false
-          fi
-          test "$(gh api "repos/${GH_REPO}/releases/tags/${TAG_NAME}" --jq .draft)" = false
 
   refresh-apt-repository:
     name: Trigger central APT repository
