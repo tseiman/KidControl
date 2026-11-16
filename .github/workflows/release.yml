@@ -130,19 +130,18 @@ jobs:
           test "$(git -C .. rev-parse "${check_ref}^{commit}")" = "$GITHUB_SHA"
           echo '::notice title=release-stage::preflight-complete'
 
-          release_info="$(gh api "repos/${GH_REPO}/releases?per_page=100" | python3 -c 'import json,os,sys; rows=[row for row in json.load(sys.stdin) if row.get("tag_name")==os.environ["TAG_NAME"]]; len(rows)<=1 or sys.exit("multiple releases exist for the tag"); print("" if not rows else str(rows[0]["id"])+" "+str(rows[0]["draft"]).lower())')"
-          set -- $release_info
-          release_id="${1:-}"
-          is_draft="${2:-}"
+          release_id=""
           already_published=false
-          if test -n "$release_id"; then
+          while read -r candidate_id is_draft; do
+            test -n "$candidate_id" || continue
             if test "$is_draft" = true; then
-              gh api --method DELETE "repos/${GH_REPO}/releases/${release_id}"
-              release_id=""
+              gh api --method DELETE "repos/${GH_REPO}/releases/${candidate_id}"
             else
+              test "$already_published" = false || { echo 'multiple published releases exist for the tag' >&2; exit 1; }
+              release_id="$candidate_id"
               already_published=true
             fi
-          fi
+          done < <(gh api "repos/${GH_REPO}/releases?per_page=100" | python3 -c 'import json,os,sys; rows=[row for row in json.load(sys.stdin) if row.get("tag_name")==os.environ["TAG_NAME"]]; [print(row["id"], str(row["draft"]).lower()) for row in rows]')
           echo '::notice title=release-stage::release-state-resolved'
           if test "$already_published" = false; then
             gh release create "$TAG_NAME" "$deb" "$sidecar" \
