@@ -128,31 +128,44 @@ jobs:
           check_ref="refs/tags/${TAG_NAME}-release-check"
           git -C .. fetch --no-tags --force origin "refs/tags/${TAG_NAME}:${check_ref}"
           test "$(git -C .. rev-parse "${check_ref}^{commit}")" = "$GITHUB_SHA"
+          echo '::notice title=release-stage::preflight-complete'
 
-          release_state=missing
-          if draft="$(gh api "repos/${GH_REPO}/releases/tags/${TAG_NAME}" --jq .draft 2>/dev/null)"; then
-            if test "$draft" = true; then release_state=draft; else release_state=published; fi
+          release_info="$(gh api "repos/${GH_REPO}/releases?per_page=100" | python3 -c 'import json,os,sys; rows=[row for row in json.load(sys.stdin) if row.get("tag_name")==os.environ["TAG_NAME"]]; len(rows)<=1 or sys.exit("multiple releases exist for the tag"); print("" if not rows else str(rows[0]["id"])+" "+str(rows[0]["draft"]).lower())')"
+          set -- $release_info
+          release_id="${1:-}"
+          is_draft="${2:-}"
+          already_published=false
+          if test -n "$release_id"; then
+            if test "$is_draft" = true; then
+              gh api --method DELETE "repos/${GH_REPO}/releases/${release_id}"
+              release_id=""
+            else
+              already_published=true
+            fi
           fi
-          if test "$release_state" = missing; then
+          echo '::notice title=release-stage::release-state-resolved'
+          if test "$already_published" = false; then
             gh release create "$TAG_NAME" "$deb" "$sidecar" \
               --draft --verify-tag --generate-notes --title "$TAG_NAME"
-            release_state=draft
-          elif test "$release_state" = draft; then
-            gh release upload "$TAG_NAME" "$deb" "$sidecar" --clobber
+            release_id="$(gh api "repos/${GH_REPO}/releases?per_page=100" | python3 -c 'import json,os,sys; rows=[row for row in json.load(sys.stdin) if row.get("tag_name")==os.environ["TAG_NAME"] and row.get("draft")]; len(rows)==1 or sys.exit("expected exactly one draft release"); print(rows[0]["id"])')"
           fi
+          echo '::notice title=release-stage::draft-assets-uploaded'
 
           expected_assets="$(printf '%s\n' "$deb" "$sidecar" | sort)"
-          actual_assets="$(gh api "repos/${GH_REPO}/releases/tags/${TAG_NAME}" --jq '.assets[].name' | sort)"
+          actual_assets="$(gh api "repos/${GH_REPO}/releases/${release_id}" --jq '.assets[].name' | sort)"
           test "$actual_assets" = "$expected_assets"
-          if test "$release_state" = draft; then
-            gh release edit "$TAG_NAME" --draft=false
+          echo '::notice title=release-stage::asset-set-verified'
+          if test "$already_published" = false; then
+            gh api --method PATCH "repos/${GH_REPO}/releases/${release_id}" -F draft=false >/dev/null
           fi
-          test "$(gh api "repos/${GH_REPO}/releases/tags/${TAG_NAME}" --jq .draft)" = false
+          test "$(gh api "repos/${GH_REPO}/releases/${release_id}" --jq .draft)" = false
+          echo '::notice title=release-stage::release-published'
           mkdir verified-download
           gh release download "$TAG_NAME" --dir verified-download --pattern "$deb" --pattern "$sidecar"
           (cd verified-download && sha256sum -c "$sidecar")
           cmp "$deb" "verified-download/$deb"
           cmp "$sidecar" "verified-download/$sidecar"
+          echo '::notice title=release-stage::download-verified'
 
   refresh-apt-repository:
     name: Trigger central APT repository

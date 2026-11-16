@@ -79,9 +79,9 @@ describe('tagged release workflow contract', () => {
     expect(workflow).toContain('repos/tseiman/apt-repro/dispatches');
     expect(workflow).toContain('Missing repository secret APT_REPO_DISPATCH_TOKEN');
     expect(workflow).toContain('--draft');
-    expect(workflow).toContain('gh release upload');
+    expect(workflow).toContain('gh api --method PATCH');
     expect(workflow).toContain('gh release download');
-    expect(workflow).toContain('--draft=false');
+    expect(workflow).toContain('-F draft=false');
     expect(workflow).toContain('release-manifest.txt');
     expect(workflow).toContain('GITHUB_SHA');
   });
