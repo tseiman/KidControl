@@ -82,6 +82,11 @@ export class Store {
       CREATE TABLE IF NOT EXISTS audit(
         id INTEGER PRIMARY KEY AUTOINCREMENT, event TEXT NOT NULL, data TEXT NOT NULL, created_at INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS daily_reset(
+        id INTEGER PRIMARY KEY CHECK(id=1), time TEXT NOT NULL DEFAULT '00:00' CHECK(length(time)=5),
+        next_reset_at INTEGER CHECK(next_reset_at IS NULL OR next_reset_at>=0)
+      );
+      INSERT OR IGNORE INTO daily_reset(id,time,next_reset_at) VALUES(1,'00:00',NULL);
     `);
   }
 
@@ -197,6 +202,19 @@ export class Store {
       pending: Boolean(row.pending)
     } as unknown as AclState));
   }
+  dailyReset(): { time: string; nextResetAt: number | null } {
+    const row = this.db.prepare('SELECT time,next_reset_at nextResetAt FROM daily_reset WHERE id=1').get() as { time: string; nextResetAt: number | null };
+    return row;
+  }
+
+  setDailyReset(time: string, nextResetAt: number): void {
+    this.db.prepare('UPDATE daily_reset SET time=?,next_reset_at=? WHERE id=1').run(time, nextResetAt);
+  }
+
+  setNextDailyReset(nextResetAt: number): void {
+    this.db.prepare('UPDATE daily_reset SET next_reset_at=? WHERE id=1').run(nextResetAt);
+  }
+
   audit(event: string, data: unknown, now: number): void {
     this.db.prepare('INSERT INTO audit(event,data,created_at) VALUES(?,?,?)').run(event, JSON.stringify(data), now);
   }

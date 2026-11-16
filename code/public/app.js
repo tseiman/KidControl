@@ -267,6 +267,7 @@ function clearAuthenticatedUi() {
   byId('target-trigger').setAttribute('aria-expanded', 'false');
   byId('target-trigger').disabled = true;
   byId('adjust-submit').disabled = true;
+  byId('daily-reset-time').value = '00:00';
   renderUsageChart(undefined);
   renderOwnUsageChart(undefined);
   byId('dashboard').hidden = true;
@@ -375,6 +376,7 @@ async function refresh(expectedGeneration = sessionGeneration) {
     : undefined;
   renderOwnUsageChart(ownUsageUser);
   byId('admin').hidden = state.me.role !== 'superuser';
+  if (state.me.role === 'superuser') byId('daily-reset-time').value = state.dailyResetTime;
   if (state.users) renderTargetPicker(state.users);
 }
 
@@ -449,6 +451,10 @@ byId('adjust').onsubmit = (event) => {
   if (!byId('target').value) return;
   const seconds = (Number(byId('hours').value) * 60 + Number(byId('minutes').value)) * 60;
   void mutate('/api/admin/adjust', { userId: byId('target').value, remainingSeconds: seconds });
+};
+byId('daily-reset-form').onsubmit = (event) => {
+  event.preventDefault();
+  void mutate('/api/admin/daily-reset', { time: byId('daily-reset-time').value });
 };
 byId('target-trigger').addEventListener('click', () => {
   if (byId('target-options').hidden) openTargetPicker(); else closeTargetPicker();

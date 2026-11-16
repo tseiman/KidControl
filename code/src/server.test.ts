@@ -235,6 +235,41 @@ describe('hardened HTTP API and local smoke journey', () => {
     expect(siblingBody.usageLast7Days).not.toEqual(kidHistory);
   });
 
+  it('exposes and changes the daily reset time only for CSRF-protected superusers', async () => {
+    const kid = await login();
+    const kidStatus = await call('/api/status', { headers: { host: 'kidcontrol.test', cookie: kid.cookie } });
+    expect(await kidStatus.json()).not.toHaveProperty('dailyResetTime');
+    const kidChange = await call('/api/admin/daily-reset', {
+      method: 'POST',
+      headers: { ...headers, cookie: kid.cookie, 'x-csrf-token': kid.body.csrf, 'content-type': 'application/json' },
+      body: '{"time":"08:15"}'
+    });
+    expect(kidChange.status).toBe(403);
+
+    const root = await login('root', '9999');
+    const rootStatus = await call('/api/status', { headers: { host: 'kidcontrol.test', cookie: root.cookie } });
+    expect(await rootStatus.json()).toMatchObject({ dailyResetTime: '00:00' });
+    const missingCsrf = await call('/api/admin/daily-reset', {
+      method: 'POST', headers: { ...headers, cookie: root.cookie, 'content-type': 'application/json' }, body: '{"time":"08:15"}'
+    });
+    expect(missingCsrf.status).toBe(403);
+    const invalid = await call('/api/admin/daily-reset', {
+      method: 'POST',
+      headers: { ...headers, cookie: root.cookie, 'x-csrf-token': root.body.csrf, 'content-type': 'application/json' },
+      body: '{"time":"8:15"}'
+    });
+    expect(invalid.status).toBe(400);
+    expect(await invalid.json()).toEqual({ error: 'daily reset time must be HH:MM' });
+    const changed = await call('/api/admin/daily-reset', {
+      method: 'POST',
+      headers: { ...headers, cookie: root.cookie, 'x-csrf-token': root.body.csrf, 'content-type': 'application/json' },
+      body: '{"time":"08:15"}'
+    });
+    expect(changed.status).toBe(204);
+    const updated = await call('/api/status', { headers: { host: 'kidcontrol.test', cookie: root.cookie } });
+    expect(await updated.json()).toMatchObject({ dailyResetTime: '08:15' });
+  });
+
   it('returns 403 when a regular user targets a device reserved by a superuser', async () => {
     await core.powerChanged('tv', 'on');
     const root = await login('root', '9999');

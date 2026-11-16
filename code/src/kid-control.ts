@@ -1,6 +1,7 @@
 import { berlinDay, budgetFor, type Config, type UserConfig } from './domain.js';
 import { Store, type Claim } from './store.js';
 import { logOperationalError, logOperationalInfo } from './operational-log.js';
+import { nextDailyReset, validResetTime } from './daily-reset.js';
 export interface AclController {
   read(deviceId: string): Promise<boolean>;
   setBlocked(deviceId: string, blocked: boolean): Promise<void>;
@@ -25,6 +26,12 @@ export class KidControl {
     const result = this.queue.then(operation, operation);
     this.queue = result.then(() => undefined, () => undefined);
     return result;
+  }
+  private enqueueAfterDailyReset<T>(operation: () => Promise<T>): Promise<T> {
+    return this.enqueue(async () => {
+      await this.applyDailyResetIfDueInternal();
+      return operation();
+    });
   }
   async drain(): Promise<void> { await this.queue; }
   async close(): Promise<void> { this.closed = true; await this.queue; }
@@ -114,6 +121,20 @@ export class KidControl {
     });
   }
 
+  dailyResetTime(): string { return this.store.dailyReset().time; }
+
+  setDailyReset(authorId: string, time: string): Promise<void> {
+    return this.enqueue(async () => {
+      if (this.user(authorId).role !== 'superuser') throw new Error('superuser required');
+      if (!validResetTime(time)) throw new Error('daily reset time must be HH:MM');
+      await this.applyDailyResetIfDueInternal();
+      const next = Math.floor(nextDailyReset(this.clock(), time).getTime() / 1000);
+      this.store.setDailyReset(time, next);
+      this.store.audit('daily-reset-time-changed', { authorId, time, nextResetAt: next }, this.now());
+      logOperationalInfo('daily-reset-time-changed', { authorId, authorName: this.user(authorId).displayName, time, nextResetAt: next });
+    });
+  }
+
   private firstDifferentDay(start: number, end: number, day: string): number {
     let low = start + 1;
     let high = end;
@@ -198,7 +219,7 @@ export class KidControl {
     }
   }
 
-  start(userId: string, deviceId: string): Promise<void> { return this.enqueue(() => this.startInternal(userId, deviceId)); }
+  start(userId: string, deviceId: string): Promise<void> { return this.enqueueAfterDailyReset(() => this.startInternal(userId, deviceId)); }
   private async startInternal(userId: string, deviceId: string): Promise<void> {
     const user = this.user(userId);
     this.device(deviceId);
@@ -236,7 +257,7 @@ export class KidControl {
     logOperationalInfo('session-start', { ...this.sessionFields(userId, deviceId), ...this.budgetFields(userId) });
   }
 
-  stop(userId: string): Promise<void> { return this.enqueue(() => this.stopInternal(userId, 'user-stop')); }
+  stop(userId: string): Promise<void> { return this.enqueueAfterDailyReset(() => this.stopInternal(userId, 'user-stop')); }
   private async stopInternal(userId: string, reason: string): Promise<void> {
     const claim = this.store.claim(userId);
     if (!claim) return;
@@ -251,6 +272,33 @@ export class KidControl {
   }
 
   tick(): Promise<void> { return this.enqueue(() => this.tickInternal()); }
+  private async applyDailyResetIfDueInternal(): Promise<void> {
+    const schedule = this.store.dailyReset();
+    const now = this.now();
+    if (schedule.nextResetAt === null) {
+      this.store.setNextDailyReset(Math.floor(nextDailyReset(this.clock(), schedule.time).getTime() / 1000));
+      return;
+    }
+    if (schedule.nextResetAt > now) return;
+
+    const boundary = schedule.nextResetAt;
+    const claims = this.store.activeClaims();
+    for (const claim of claims) this.chargeInternal(claim.userId, boundary);
+    const remaining = this.store.activeClaims();
+    this.store.endMany(remaining.map((claim) => claim.userId), 'daily-reset', boundary);
+    for (const claim of remaining) {
+      logOperationalInfo('session-stop', { ...this.sessionFields(claim.userId, claim.deviceId), reason: 'daily-reset', ...this.budgetFields(claim.userId) });
+    }
+    for (const device of this.config.devices) {
+      try { await this.reconcileInternal(device.id, true); } catch { /* durable pending block */ }
+    }
+
+    const next = Math.floor(nextDailyReset(this.clock(), schedule.time).getTime() / 1000);
+    this.store.setNextDailyReset(next);
+    this.store.audit('automatic-reset', { scheduledAt: boundary, time: schedule.time, claimsEnded: claims.length, nextResetAt: next }, boundary);
+    logOperationalInfo('automatic-reset', { scheduledAt: boundary, time: schedule.time, claimsEnded: claims.length, nextResetAt: next });
+  }
+
   private accountActiveInternal(): Set<string> {
     const affected = new Set<string>();
     for (const claim of this.store.activeClaims()) {
@@ -260,6 +308,7 @@ export class KidControl {
     return affected;
   }
   private async tickInternal(): Promise<void> {
+    await this.applyDailyResetIfDueInternal();
     const affected = this.accountActiveInternal();
     for (const deviceId of affected) {
       try { await this.reconcileInternal(deviceId); } catch { /* durable pending state retries later */ }
@@ -267,7 +316,7 @@ export class KidControl {
     await this.retryPendingInternal();
   }
 
-  powerChanged(deviceId: string, state: Power): Promise<void> { return this.enqueue(() => this.powerInternal(deviceId, state)); }
+  powerChanged(deviceId: string, state: Power): Promise<void> { return this.enqueueAfterDailyReset(() => this.powerInternal(deviceId, state)); }
   private async powerInternal(deviceId: string, state: Power): Promise<void> {
     this.device(deviceId);
     this.store.db.prepare(`INSERT INTO power_state VALUES(?,?,?) ON CONFLICT(device_id) DO UPDATE SET state=excluded.state,updated_at=excluded.updated_at`).run(deviceId, state, this.now());
@@ -286,6 +335,7 @@ export class KidControl {
       const target = this.user(userId);
       if (target.role !== 'user') throw new Error('target must be a regular user');
       if (!Number.isInteger(seconds) || seconds < 0 || seconds > 89_940) throw new Error('remaining time must be 00:00 through 24:59');
+      await this.applyDailyResetIfDueInternal();
       const priorClaim = this.store.claim(userId);
       this.chargeInternal(userId);
       const delta = seconds - this.remainingAt(target, this.now());
@@ -298,7 +348,7 @@ export class KidControl {
     });
   }
 
-  adoptAcl(deviceId: string, blocked: boolean): Promise<void> { return this.enqueue(() => this.adoptInternal(deviceId, blocked)); }
+  adoptAcl(deviceId: string, blocked: boolean): Promise<void> { return this.enqueueAfterDailyReset(() => this.adoptInternal(deviceId, blocked)); }
   private async adoptInternal(deviceId: string, blocked: boolean): Promise<void> {
     this.device(deviceId);
     if (blocked) {
@@ -324,6 +374,7 @@ export class KidControl {
     if (removed.length > 0) {
       throw new Error(`removed managed device may still be allowed: ${removed.join(', ')}; restore the previous configuration before migration`);
     }
+    await this.applyDailyResetIfDueInternal();
     const affected = this.accountActiveInternal();
     for (const claim of this.store.activeClaims()) {
       if (!this.config.users.some((user) => user.id === claim.userId) || !this.config.devices.some((device) => device.id === claim.deviceId)) {
@@ -369,6 +420,7 @@ export class KidControl {
   }
 
   poll(): Promise<void> { return this.enqueue(async () => {
+    await this.applyDailyResetIfDueInternal();
     const affected = this.accountActiveInternal();
     for (const deviceId of affected) {
       try { await this.reconcileInternal(deviceId); } catch { /* remains pending */ }
@@ -417,6 +469,7 @@ export class KidControl {
 
   restore(authorId: string): Promise<void> { return this.enqueue(async () => {
     if (this.user(authorId).role !== 'superuser') throw new Error('superuser required');
+    await this.applyDailyResetIfDueInternal();
     for (const device of this.config.devices) {
       const prior = this.store.aclState(device.id);
       if (prior) this.store.setAcl({ ...prior, baselineBlocked: true, source: 'pending', pending: true, updatedAt: this.now() });

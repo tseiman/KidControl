@@ -20,6 +20,7 @@ The production TypeScript implementation exists under `code/`. Automated tests c
 - sessions, usage, time adjustments, and runtime state stored in a lightweight, Node.js-compatible SQLite database;
 - user administration exclusively through the configuration file, not through the WebUI;
 - superuser functions provided through the WebUI with an accessible custom user picker;
+- a superuser-configurable daily reset time, persisted in SQLite and defaulting to `00:00` Europe/Berlin;
 - client-side English/German localization selected from browser preferences, with English as the fallback;
 - operational `key=value` logging to standard output/error, collected by the standard systemd journal without a dedicated Node.js syslog library or separate application log files.
 
@@ -102,6 +103,14 @@ A superuser:
 - displaces regular sessions on the selected Apple TV.
 
 Displaced regular sessions are paused and are not resumed automatically. Once superuser usage ends, a regular user must press **Start** again.
+
+### Daily Network Reset
+
+A superuser can set one daily local reset time in the WebUI. The value is stored as strict `HH:MM` runtime state in SQLite, not in `config.json`, and defaults to `00:00`. At each scheduled `Europe/Berlin` occurrence KidControl performs the equivalent of stopping every active device-usage session: it accounts regular and superuser claims only through the scheduled boundary, ends those claims, sets every managed device's baseline and desired ACL state to blocked, and durably retries failed ACL writes. The automatic action is audited and written to the operational log.
+
+Changing the time always schedules the next future occurrence; selecting a wall time that already passed today does not trigger an immediate reset. A persisted occurrence missed while the service was down is applied once during recovery or polling. On spring-forward days, a nonexistent wall time runs at the first valid instant after it; on fall-back days, a repeated wall time runs only once at its first occurrence.
+
+This reset affects device-usage claims only. Browser authentication sessions remain valid, and budgets, adjustments, usage history, and login throttling remain untouched except for normal accounting of the ended usage intervals.
 
 ## 5. Multi-User and Device State
 

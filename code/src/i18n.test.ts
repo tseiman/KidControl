@@ -24,6 +24,10 @@ describe('client-side WebUI localization', () => {
     expect(translate('de', 'picker.remaining', { time: '01:02:03' })).toBe('01:02:03 verbleibend');
     expect(translate('en', 'admin.restore')).toBe('Restore network state');
     expect(translate('de', 'admin.restore')).toBe('Netzwerkzustand wiederherstellen');
+    expect(translate('en', 'admin.dailyResetTime')).toBe('Daily reset time');
+    expect(translate('de', 'admin.dailyResetTime')).toBe('Tägliche Rücksetzzeit');
+    expect(translate('en', 'admin.saveDailyReset')).toBe('Save daily reset time');
+    expect(translate('de', 'admin.saveDailyReset')).toBe('Tägliche Rücksetzzeit speichern');
     expect(translate('en', 'usage.title')).toBe('Usage · last 7 days');
     expect(translate('de', 'usage.title')).toBe('Nutzung · letzte 7 Tage');
     expect(translate('de', 'usage.barLabel', { day: 'Fr', time: '01:02:03' })).toBe('Fr: 01:02:03 Nutzung');
@@ -60,7 +64,8 @@ describe('client-side WebUI localization', () => {
       'device reserved by superuser': 'Gerät ist durch einen Superuser reserviert',
       'superuser required': 'Superuser-Berechtigung erforderlich',
       'target must be a regular user': 'Das Ziel muss ein regulärer Benutzer sein',
-      'remaining time must be 00:00 through 24:59': 'Die verbleibende Zeit muss zwischen 00:00 und 24:59 liegen'
+      'remaining time must be 00:00 through 24:59': 'Die verbleibende Zeit muss zwischen 00:00 und 24:59 liegen',
+      'daily reset time must be HH:MM': 'Die tägliche Rücksetzzeit muss im Format HH:MM angegeben werden'
     };
 
     for (const [message, expected] of Object.entries(errors)) {

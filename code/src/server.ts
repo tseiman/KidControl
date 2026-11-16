@@ -146,7 +146,9 @@ export function createKidControlServer(config: Config, core: KidControl, auth: A
           me: userView(user), remainingSeconds: state.remainingSeconds, unlimited: state.unlimited,
           activeDeviceId: state.activeDeviceId, devices: core.deviceStatuses(),
           ...(user.role === 'user' ? { usageLast7Days: core.usageHistory(user.id) } : {}),
-          ...(user.role === 'superuser' ? { users: config.users.filter((item) => item.role === 'user').map((item) => ({
+          ...(user.role === 'superuser' ? {
+            dailyResetTime: core.dailyResetTime(),
+            users: config.users.filter((item) => item.role === 'user').map((item) => ({
             id: item.id,
             displayName: item.displayName,
             ...(item.icon ? { iconUrl: iconUrl(item) } : {}),
@@ -164,6 +166,11 @@ export function createKidControlServer(config: Config, core: KidControl, auth: A
       const input = await body(req, bodyLimit);
       if (url.pathname === '/api/claim') { await core.start(user.id, String(input.deviceId ?? '')); return send(res, 204, undefined, { 'Cache-Control': 'no-store' }); }
       if (url.pathname === '/api/stop') { await core.stop(user.id); return send(res, 204, undefined, { 'Cache-Control': 'no-store' }); }
+      if (url.pathname === '/api/admin/daily-reset') {
+        if (user.role !== 'superuser') return send(res, 403, { error: 'superuser required' }, { 'Cache-Control': 'no-store' });
+        await core.setDailyReset(user.id, String(input.time ?? ''));
+        return send(res, 204, undefined, { 'Cache-Control': 'no-store' });
+      }
       if (url.pathname === '/api/admin/adjust') {
         if (user.role !== 'superuser') return send(res, 403, { error: 'superuser required' }, { 'Cache-Control': 'no-store' });
         await core.setRemaining(user.id, String(input.userId ?? ''), Number(input.remainingSeconds));
@@ -179,7 +186,7 @@ export function createKidControlServer(config: Config, core: KidControl, auth: A
       const message = error instanceof Error ? error.message : 'request failed';
       if (message === 'invalid credentials') return send(res, 401, { error: 'invalid credentials' }, { 'Cache-Control': 'no-store' });
       const authorizationError = /reserved by superuser|superuser required/.test(message);
-      const clientError = /unknown|invalid|exhausted|required|00:00|too large/.test(message);
+      const clientError = /unknown|invalid|exhausted|required|00:00|HH:MM|too large/.test(message);
       const powerConflict = message === 'Apple TV is not on';
       if (!clientError && !authorizationError && !powerConflict) logOperationalError('request-error', { method: req.method ?? 'GET', path: req.url ?? '/', message });
       const status = authorizationError ? 403 : powerConflict ? 409 : clientError ? (message.includes('too large') ? 413 : 400) : 500;

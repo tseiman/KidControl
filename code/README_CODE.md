@@ -121,9 +121,10 @@ Useful endpoints:
 - `POST /api/stop`
 - `POST /api/logout`
 - `POST /api/admin/adjust`
+- `POST /api/admin/daily-reset` — set the persisted daily `Europe/Berlin` reset time as strict `HH:MM`
 - `POST /api/admin/restore`
 
-For authenticated superusers, `GET /api/status` includes seven chronological, zero-filled daily ledger totals ending on the current `Europe/Berlin` calendar day for every regular user. A regular-user response includes the same history only for the authenticated user and does not expose the administrative user list or any other user's usage.
+For authenticated superusers, `GET /api/status` includes the current persisted `dailyResetTime` plus seven chronological, zero-filled daily ledger totals ending on the current `Europe/Berlin` calendar day for every regular user. A regular-user response includes the same history only for the authenticated user and does not expose the reset setting, administrative user list, or any other user's usage.
 
 ## Service logging
 
@@ -134,6 +135,7 @@ The example systemd unit sends application stdout and stderr to the standard sys
 - `session-progress` — active user, Apple TV, and remaining seconds once per 15-minute interval;
 - `session-stop` — user, Apple TV, remaining seconds, and reason such as `manual`, `apple-tv-off`, or `budget-exhausted`;
 - `budget-change` — daily budget allocation or a superuser adjustment including amount, target, and author;
+- `daily-reset-time-changed` and `automatic-reset` — superuser schedule changes and completed scheduled device-usage resets;
 - `request-error` and `acl-error` — unexpected request or UniFi ACL failures without credentials.
 
 PINs, cookies, CSRF values, API keys, and Apple TV credentials are never included. KidControl does not create separate application log files. Follow the journal with:
@@ -147,6 +149,8 @@ For example, filter session stops with `sudo journalctl -u kidcontrol.service -o
 ## Accounting and recovery
 
 Times are persisted as integer epoch seconds and charged as half-open intervals. Ledger entries are split at Berlin midnight. If the service is unavailable while a claim exists, the interval is conservatively charged at recovery. Charging stops at the exact budget-exhaustion second, including across midnight and DST transitions.
+
+The superuser WebUI stores a strict `HH:MM` daily reset setting in SQLite; the default is `00:00`. Each `Europe/Berlin` occurrence accounts every active regular and superuser usage claim only through the scheduled boundary, ends those usage claims, and forces every managed ACL baseline and desired state to blocked with durable retry. A missed persisted occurrence is applied once on recovery/poll. A newly selected time always starts with its next future occurrence, spring-forward gaps run at the first valid later instant, and fall-back repeats run once. HTTP authentication sessions, adjustments, usage history, budgets, and login throttles are not reset.
 
 SQLite enables foreign keys, a busy timeout, `synchronous=FULL`, and WAL for file-backed databases. The service applies umask `0077` and mode `0600` to database files.
 
