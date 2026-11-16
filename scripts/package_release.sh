@@ -6,6 +6,7 @@ PROJECT_ROOT="$(CDPATH= cd "$SCRIPT_DIR/.." && pwd -P)"
 CODE_DIR="$PROJECT_ROOT/code"
 OUTPUT_DIR="${PACKAGE_OUTPUT_DIR:-$PROJECT_ROOT}"
 NODE_VERSION="22.22.3"
+NPM_VERSION="12.0.2"
 NODE_ARCHIVE="node-v${NODE_VERSION}-linux-x64.tar.xz"
 NODE_BASE_URL="https://nodejs.org/dist/v${NODE_VERSION}"
 STAGE_DIR=""
@@ -42,6 +43,7 @@ fi
 for command in curl dpkg-deb git install npm sha256sum tar xz; do
   command -v "$command" >/dev/null 2>&1 || die "required command not found: $command"
 done
+[[ "$(npm --version)" == "$NPM_VERSION" ]] || die "npm $NPM_VERSION is required for reproducible Git dependency installation"
 
 if [[ -n "${PACKAGE_VERSION_OVERRIDE:-}" ]]; then
   [[ "${PACKAGE_TEST_MODE:-0}" == "1" ]] || die "PACKAGE_VERSION_OVERRIDE is allowed only with PACKAGE_TEST_MODE=1"
@@ -65,7 +67,6 @@ DEB_PATH="$OUTPUT_DIR/kidcontrol_${VERSION}_amd64.deb"
 log "installing and testing the exact source dependency graph"
 (
   cd "$CODE_DIR"
-  npm config set allow-git root --location=project
   npm ci
   npm test
   npm run build
@@ -78,7 +79,6 @@ DEPS_DIR="$(mktemp -d "${PACKAGE_TMPDIR:-${TMPDIR:-/tmp}}/kidcontrol-deps.XXXXXX
 install -m 0644 "$CODE_DIR/package.json" "$CODE_DIR/package-lock.json" "$DEPS_DIR/"
 (
   cd "$DEPS_DIR"
-  npm config set allow-git root --location=project
   npm ci --omit=dev
   npm audit --omit=dev
 )

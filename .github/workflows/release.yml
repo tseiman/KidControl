@@ -31,11 +31,12 @@ jobs:
           node-version: 22.22.3
           cache: npm
           cache-dependency-path: code/package-lock.json
+      - name: Pin npm for Git dependency installation
+        run: npm install --global npm@12.0.2
       - name: Test, build, and audit
         working-directory: code
         run: |
           set -euo pipefail
-          npm config set allow-git root --location=project
           npm ci
           npm test
           npm run build
@@ -55,6 +56,8 @@ jobs:
           node-version: 22.22.3
           cache: npm
           cache-dependency-path: code/package-lock.json
+      - name: Pin npm for Git dependency installation
+        run: npm install --global npm@12.0.2
       - name: Build Debian package
         run: ./scripts/package_release.sh amd64
       - name: Inspect package and checksum

@@ -20,6 +20,7 @@ describe('Debian package builder contract', () => {
   it('pins and verifies the official Node runtime', () => {
     const script = read('scripts/package_release.sh');
     expect(script).toContain('NODE_VERSION="22.22.3"');
+    expect(script).toContain('NPM_VERSION="12.0.2"');
     expect(script).toContain('SHASUMS256.txt');
     expect(script).toContain('sha256sum -c');
     expect(script).toContain('node-v${NODE_VERSION}-linux-x64.tar.xz');
@@ -61,7 +62,8 @@ describe('tagged release workflow contract', () => {
 
   it('runs only for version tags and validates before publishing', () => {
     expect(workflow).toContain('"v[0-9]*"');
-    expect(workflow).toContain('npm config set allow-git root --location=project');
+    expect(workflow).not.toContain('npm config set allow-git');
+    expect(workflow.match(/npm install --global npm@12\.0\.2/g)).toHaveLength(2);
     expect(workflow).toContain('npm ci');
     expect(workflow).toContain('npm test');
     expect(workflow).toContain('npm run build');
