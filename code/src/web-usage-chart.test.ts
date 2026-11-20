@@ -14,10 +14,10 @@ function declarations(source: string, selector: string): Map<string, string> {
 }
 
 describe('superuser seven-day usage chart', () => {
-  it('places one accessible chart below the network restore action', () => {
+  it('places one accessible chart with the selected user', () => {
     const html = asset('index.html');
     const elements = [
-      'id="restore"',
+      'id="target-picker"',
       'id="usage-chart"',
       'id="usage-chart-title"',
       'id="usage-detail"',

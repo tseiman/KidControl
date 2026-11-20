@@ -116,6 +116,11 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 .device-status { color: var(--muted); margin: .35rem 0 0; font-size: .9rem; }
 #message { min-height: 1.5rem; color: var(--accent); margin-bottom: .7rem; }
 .time-pickers { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.admin-area > h2 { margin-bottom: .8rem; }
+.admin-adjust-form { margin: 0; }
+.admin-section > h3 { margin: 0 0 .8rem; font-size: 1.05rem; }
+.admin-section .picker-field { margin-top: 0; }
+#admin-network #restore { margin-bottom: 0; }
 .docs { background: var(--panel); border-radius: 18px; padding: 1.2rem; }
 
 .profile-fieldset {

@@ -69,40 +69,55 @@
         </div>
       </section>
 
-      <section id="admin" class="panel" hidden>
-        <h2 data-i18n="admin.title">Superuser controls</h2>
-        <form id="adjust">
-          <div class="picker-field">
-            <span id="target-label" class="field-label" data-i18n="admin.user">User</span>
-            <div id="target-picker" class="user-picker">
-              <button id="target-trigger" class="user-picker-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="target-label target-trigger"></button>
-              <div id="target-options" class="user-picker-options" role="listbox" aria-labelledby="target-label" hidden></div>
+      <section id="admin" class="admin-area" hidden>
+        <h2 data-i18n="admin.title">Administration</h2>
+        <form id="adjust" class="admin-adjust-form">
+          <section id="admin-users" class="panel admin-section" aria-labelledby="admin-users-title">
+            <h3 id="admin-users-title" data-i18n="admin.usersTitle">Users</h3>
+            <div class="picker-field">
+              <span id="target-label" class="field-label" data-i18n="admin.user">User</span>
+              <div id="target-picker" class="user-picker">
+                <button id="target-trigger" class="user-picker-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="target-label target-trigger"></button>
+                <div id="target-options" class="user-picker-options" role="listbox" aria-labelledby="target-label" hidden></div>
+              </div>
+              <input id="target" type="hidden">
             </div>
-            <input id="target" type="hidden">
-          </div>
-          <div class="time-pickers">
-            <label><span data-i18n="admin.hours">Hours</span><select id="hours"></select></label>
-            <label><span data-i18n="admin.minutes">Minutes</span><select id="minutes"></select></label>
-          </div>
-          <button id="adjust-submit" data-i18n="admin.setRemaining">Set remaining time</button>
-        </form>
-        <form id="daily-reset-form" class="daily-reset-form">
-          <label><span data-i18n="admin.dailyResetTime">Daily reset time</span><input id="daily-reset-time" type="time" required></label>
-          <button data-i18n="admin.saveDailyReset">Save daily reset time</button>
-        </form>
-        <button id="restore" class="secondary wide" data-i18n="admin.restore">Restore network state</button>
-        <section id="usage-chart" class="usage-chart" aria-labelledby="usage-chart-title" hidden>
-          <div class="usage-chart-heading">
-            <h3 id="usage-chart-title" data-i18n="usage.title">Usage · last 7 days</h3>
-            <span id="usage-detail" class="usage-detail" aria-live="polite" aria-atomic="true">--</span>
-          </div>
-          <div class="usage-chart-body">
-            <div class="usage-axis" aria-hidden="true">
-              <span id="usage-axis-max">1 h</span>
-              <span>0</span>
+            <section id="usage-chart" class="usage-chart" aria-labelledby="usage-chart-title" hidden>
+              <div class="usage-chart-heading">
+                <h3 id="usage-chart-title" data-i18n="usage.title">Usage · last 7 days</h3>
+                <span id="usage-detail" class="usage-detail" aria-live="polite" aria-atomic="true">--</span>
+              </div>
+              <div class="usage-chart-body">
+                <div class="usage-axis" aria-hidden="true">
+                  <span id="usage-axis-max">1 h</span>
+                  <span>0</span>
+                </div>
+                <div id="usage-bars" class="usage-bars"></div>
+              </div>
+            </section>
+          </section>
+
+          <section id="admin-remaining" class="panel admin-section" aria-labelledby="admin-remaining-title">
+            <h3 id="admin-remaining-title" data-i18n="admin.remainingTitle">Set remaining time</h3>
+            <div class="time-pickers">
+              <label><span data-i18n="admin.hours">Hours</span><select id="hours"></select></label>
+              <label><span data-i18n="admin.minutes">Minutes</span><select id="minutes"></select></label>
             </div>
-            <div id="usage-bars" class="usage-bars"></div>
-          </div>
+            <button id="adjust-submit" data-i18n="admin.setRemaining">Set remaining time</button>
+          </section>
+        </form>
+
+        <section id="admin-daily-reset" class="panel admin-section" aria-labelledby="admin-daily-reset-title">
+          <h3 id="admin-daily-reset-title" data-i18n="admin.dailyResetTitle">Daily reset</h3>
+          <form id="daily-reset-form" class="daily-reset-form">
+            <label><span data-i18n="admin.dailyResetTime">Daily reset time</span><input id="daily-reset-time" type="time" required></label>
+            <button data-i18n="admin.saveDailyReset">Save daily reset time</button>
+          </form>
+        </section>
+
+        <section id="admin-network" class="panel admin-section" aria-labelledby="admin-network-title">
+          <h3 id="admin-network-title" data-i18n="admin.networkTitle">Reset network status</h3>
+          <button id="restore" class="secondary wide" data-i18n="admin.restore">Restore network state</button>
         </section>
       </section>
     </section>
