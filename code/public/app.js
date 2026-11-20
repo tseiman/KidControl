@@ -12,6 +12,9 @@ let sessionGeneration = 0;
 let loginPending = false;
 let loginLockDeadline = 0;
 let loginLockTimer;
+let refreshPending;
+let refreshPendingGeneration = -1;
+let statusPollTimer;
 let publicUsers = [];
 let selectedLoginUserId = '';
 let adminUsers = [];
@@ -248,6 +251,7 @@ function renderOwnUsageChart(user) {
 }
 
 function clearAuthenticatedUi() {
+  stopStatusPolling();
   csrf = '';
   state = null;
   lastSync = Date.now();
@@ -335,7 +339,7 @@ function openTargetPicker() {
   byId('target-trigger').setAttribute('aria-expanded', 'true');
 }
 
-async function refresh(expectedGeneration = sessionGeneration) {
+async function refreshOnce(expectedGeneration) {
   let nextState;
   try {
     nextState = await api('/api/status');
@@ -378,6 +382,45 @@ async function refresh(expectedGeneration = sessionGeneration) {
   byId('admin').hidden = state.me.role !== 'superuser';
   if (state.me.role === 'superuser') byId('daily-reset-time').value = state.dailyResetTime;
   if (state.users) renderTargetPicker(state.users);
+}
+
+function stopStatusPolling() {
+  if (statusPollTimer) clearTimeout(statusPollTimer);
+  statusPollTimer = undefined;
+}
+
+function scheduleStatusPolling() {
+  stopStatusPolling();
+  if (!state || document.visibilityState !== 'visible') return;
+  statusPollTimer = setTimeout(() => {
+    statusPollTimer = undefined;
+    if (!state || document.visibilityState !== 'visible') return;
+    void refresh().catch((error) => note(localizedError(error.message), true));
+  }, 30_000);
+}
+
+function refresh(expectedGeneration = sessionGeneration) {
+  if (refreshPendingGeneration === expectedGeneration && refreshPending) return refreshPending;
+  refreshPendingGeneration = expectedGeneration;
+  const pending = refreshOnce(expectedGeneration).finally(() => {
+    if (refreshPending === pending) {
+      refreshPending = undefined;
+      refreshPendingGeneration = -1;
+    }
+    if (expectedGeneration === sessionGeneration) scheduleStatusPolling();
+  });
+  refreshPending = pending;
+  return pending;
+}
+
+function refreshForActivity() {
+  if (document.visibilityState !== 'visible') {
+    stopStatusPolling();
+    return;
+  }
+  if (!state) return;
+  stopStatusPolling();
+  void refresh().catch((error) => note(localizedError(error.message), true));
 }
 
 async function mutate(path, value = {}) {
@@ -487,9 +530,13 @@ setInterval(() => {
     byId('remaining').textContent = format(state.remainingSeconds - (Date.now() - lastSync) / 1000);
   }
 }, 1000);
-setInterval(() => {
-  if (state) void refresh().catch((error) => note(localizedError(error.message), true));
-}, 10_000);
+window.addEventListener('pageshow', refreshForActivity);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') stopStatusPolling();
+  else refreshForActivity();
+});
+window.addEventListener('focus', refreshForActivity);
+window.addEventListener('online', refreshForActivity);
 
 (async () => {
   const choices = await api('/api/public');

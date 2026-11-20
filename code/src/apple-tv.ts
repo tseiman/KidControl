@@ -7,6 +7,7 @@ type TvLike = EventEmitter & {
   deviceId: string;
   powerState?: string;
   connectCompanion(credentials: unknown): Promise<void>;
+  refreshPowerState(): Promise<string>;
   close(): Promise<void> | void;
 };
 interface Library {
@@ -38,6 +39,11 @@ export class AppleTvMonitor {
   private readonly active = new Map<string, TvLike>();
   private readonly timers = new Map<string, NodeJS.Timeout>();
   private readonly delays = new Map<string, number>();
+  private readonly connecting = new Map<string, Promise<TvLike>>();
+  private readonly refreshing = new Map<string, Promise<Power>>();
+  private readonly lastPower = new Map<string, Power>();
+  private readonly lastConfirmedAt = new Map<string, number>();
+  private scanning: Promise<Array<{ deviceId: string }>> | undefined;
   private readonly baseReconnectMs: number;
   private readonly maxReconnectMs: number;
   private credentials = new Map<string, CredentialsLike>();
@@ -66,7 +72,10 @@ export class AppleTvMonitor {
     }, onPower);
   }
 
-  private async publish(deviceId: string, state: Power): Promise<void> {
+  private async publish(deviceId: string, state: Power, confirmed = false): Promise<void> {
+    this.lastPower.set(deviceId, state);
+    if (confirmed && (state === 'on' || state === 'off')) this.lastConfirmedAt.set(deviceId, Date.now());
+    if (state === 'unknown') this.lastConfirmedAt.delete(deviceId);
     try { await this.onPower(deviceId, state); }
     catch (error) { console.error('Apple TV power callback failed', error instanceof Error ? error.message : 'unknown error'); }
   }
@@ -78,21 +87,37 @@ export class AppleTvMonitor {
       console.error('Apple TV credentials unavailable', error instanceof Error ? error.message : 'invalid credentials');
       return;
     }
-    await Promise.all(this.devices.map((device) => this.connectDevice(device)));
+    await Promise.all(this.devices.map((device) => this.connectDevice(device).catch(() => undefined)));
   }
 
-  private async connectDevice(device: { id: string; appleTvIdentifier: string }): Promise<void> {
-    if (this.stopping) return;
+  private device(deviceId: string): { id: string; appleTvIdentifier: string } {
+    const device = this.devices.find((candidate) => candidate.id === deviceId);
+    if (!device) throw new Error(`unknown Apple TV device: ${deviceId}`);
+    return device;
+  }
+
+  private async connectDevice(device: { id: string; appleTvIdentifier: string }): Promise<TvLike> {
+    const pending = this.connecting.get(device.id);
+    if (pending) return pending;
+    const connection = this.connectDeviceOnce(device).finally(() => {
+      if (this.connecting.get(device.id) === connection) this.connecting.delete(device.id);
+    });
+    this.connecting.set(device.id, connection);
+    return connection;
+  }
+
+  private async connectDeviceOnce(device: { id: string; appleTvIdentifier: string }): Promise<TvLike> {
+    if (this.stopping) throw new Error('Apple TV monitor is stopping');
     const credential = this.credentials.get(device.appleTvIdentifier)?.companionCredentials;
     if (!credential) {
       await this.publish(device.id, 'unknown');
       this.schedule(device);
-      return;
+      throw new Error('companion credentials unavailable');
     }
+    let tv = this.active.get(device.id);
     try {
-      let tv = this.active.get(device.id);
       if (!tv) {
-        const found = await this.library.scan();
+        const found = await this.scan();
         const discovered = found.find((candidate) => candidate.deviceId === device.appleTvIdentifier);
         if (!discovered) throw new Error('not discovered');
         tv = this.library.create(discovered);
@@ -100,13 +125,96 @@ export class AppleTvMonitor {
         this.bind(device, tv);
       }
       await tv.connectCompanion(credential);
+      if (this.stopping || this.active.get(device.id) !== tv) {
+        throw new Error('Apple TV connection changed while connecting');
+      }
+      const reconnectTimer = this.timers.get(device.id);
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      this.timers.delete(device.id);
       this.delays.set(device.id, this.baseReconnectMs);
       const power = tv.powerState;
-      await this.publish(device.id, power === 'on' || power === 'off' ? power : 'unknown');
+      const state = power === 'on' || power === 'off' ? power : 'unknown';
+      await this.publish(device.id, state, state !== 'unknown');
+      return tv;
     } catch (error) {
-      await this.publish(device.id, 'unknown');
-      this.schedule(device);
+      if (tv) await this.invalidate(device.id, tv);
+      if (!this.active.has(device.id)) {
+        await this.publish(device.id, 'unknown');
+        this.schedule(device);
+      }
       console.error(`Apple TV ${device.id} unavailable`, error instanceof Error ? error.message : 'unknown error');
+      throw error;
+    }
+  }
+
+  private scan(): Promise<Array<{ deviceId: string }>> {
+    if (this.scanning) return this.scanning;
+    const pending = this.library.scan().finally(() => {
+      if (this.scanning === pending) this.scanning = undefined;
+    });
+    this.scanning = pending;
+    return pending;
+  }
+
+  private async invalidate(deviceId: string, tv: TvLike): Promise<void> {
+    if (this.active.get(deviceId) !== tv) return;
+    this.active.delete(deviceId);
+    this.lastConfirmedAt.delete(deviceId);
+    try { await tv.close(); } catch { /* best effort invalidation */ }
+  }
+
+  async refreshDevice(deviceId: string, maxAgeMs = 10_000): Promise<Power> {
+    const confirmedAt = this.lastConfirmedAt.get(deviceId);
+    const cached = this.lastPower.get(deviceId);
+    if (maxAgeMs > 0 && cached && confirmedAt !== undefined && Date.now() - confirmedAt <= maxAgeMs) return cached;
+    const pending = this.refreshing.get(deviceId);
+    if (pending) return pending;
+    const refresh = this.refreshDeviceOnce(this.device(deviceId)).finally(() => {
+      if (this.refreshing.get(deviceId) === refresh) this.refreshing.delete(deviceId);
+    });
+    this.refreshing.set(deviceId, refresh);
+    return refresh;
+  }
+
+  async refreshAll(maxAgeMs = 10_000): Promise<void> {
+    await Promise.allSettled(this.devices.map((device) => this.refreshDevice(device.id, maxAgeMs)));
+  }
+
+  private async refreshDeviceOnce(device: { id: string; appleTvIdentifier: string }): Promise<Power> {
+    let tv = this.active.get(device.id);
+    if (!tv) {
+      tv = await this.connectDevice(device);
+      const connectedState = this.lastPower.get(device.id);
+      if (this.lastConfirmedAt.has(device.id) && (connectedState === 'on' || connectedState === 'off')) {
+        return connectedState;
+      }
+    }
+    try {
+      const result = await tv.refreshPowerState();
+      if (this.active.get(device.id) !== tv) throw new Error('Apple TV connection changed during refresh');
+      const state: Power = result === 'on' || result === 'off' ? result : 'unknown';
+      await this.publish(device.id, state, state !== 'unknown');
+      if (state === 'unknown') throw new Error('Apple TV power state is unknown');
+      return state;
+    } catch (firstError) {
+      await this.invalidate(device.id, tv);
+      await this.publish(device.id, 'unknown');
+      try {
+        const replacement = await this.connectDevice(device);
+        const connectedState = this.lastPower.get(device.id);
+        if (this.lastConfirmedAt.has(device.id) && (connectedState === 'on' || connectedState === 'off')) {
+          return connectedState;
+        }
+        const result = await replacement.refreshPowerState();
+        if (this.active.get(device.id) !== replacement) throw new Error('Apple TV connection changed during refresh');
+        const state: Power = result === 'on' || result === 'off' ? result : 'unknown';
+        await this.publish(device.id, state, state !== 'unknown');
+        if (state === 'unknown') throw new Error('Apple TV power state is unknown');
+        return state;
+      } catch (error) {
+        await this.publish(device.id, 'unknown');
+        throw error instanceof Error ? error : firstError;
+      }
     }
   }
 
@@ -125,13 +233,18 @@ export class AppleTvMonitor {
 
   private bind(device: { id: string; appleTvIdentifier: string }, tv: TvLike): void {
     tv.on('powerStateChanged', (event: PowerStateChangedEvent) => {
+      if (this.active.get(device.id) !== tv) return;
       const state = event.current as Power;
-      if (state === 'on' || state === 'off' || state === 'unknown') void this.publish(device.id, state);
+      if (state === 'on' || state === 'off' || state === 'unknown') void this.publish(device.id, state, state !== 'unknown');
     });
     const disconnected = () => {
-      if (this.stopping) return;
-      void this.publish(device.id, 'unknown');
-      this.schedule(device);
+      if (this.stopping || this.active.get(device.id) !== tv) return;
+      void (async () => {
+        await this.invalidate(device.id, tv);
+        if (this.active.has(device.id)) return;
+        await this.publish(device.id, 'unknown');
+        this.schedule(device);
+      })();
     };
     tv.on('companionClose', disconnected);
     tv.on('companionError', disconnected);

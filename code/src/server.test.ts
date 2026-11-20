@@ -19,16 +19,23 @@ const origin = 'https://kidcontrol.test';
 
 describe('hardened HTTP API and local smoke journey', () => {
   let store: Store; let server: ReturnType<typeof createKidControlServer>; let base: string; let auth: Auth; let core: KidControl; let iconDir: string;
+  let powerRefresh: { refreshAll: ReturnType<typeof vi.fn>; refreshDevice: ReturnType<typeof vi.fn> };
   beforeEach(async () => {
     iconDir = mkdtempSync(join(tmpdir(), 'kidcontrol-icons-'));
     writeFileSync(join(iconDir, 'kid.webp'), Buffer.from([0x52, 0x49, 0x46, 0x46]));
     store = new Store(':memory:');
     core = new KidControl(config, store, { read: async () => true, setBlocked: vi.fn(async () => undefined) }, () => new Date('2026-07-31T12:00:00Z'));
     auth = new Auth(store, () => config.users, Buffer.alloc(32, 9));
+    powerRefresh = {
+      refreshAll: vi.fn(async () => undefined),
+      refreshDevice: vi.fn(async (deviceId: string) => (
+        core.deviceStatuses().find((device) => device.id === deviceId)?.power ?? 'unknown'
+      ))
+    };
     server = createKidControlServer(config, core, auth, {
       publicDir: new URL('../public/', import.meta.url), documentation: '# KidControl\n\nSafe docs.',
       publicOrigin: origin, trustedProxyIp: '127.0.0.1', iconDir
-    });
+    }, powerRefresh);
     server.listen(0, '127.0.0.1'); await once(server, 'listening');
     const address = server.address(); base = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}`;
   });
@@ -287,6 +294,75 @@ describe('hardened HTTP API and local smoke journey', () => {
     expect(response.status).toBe(403);
   });
 
+  it('refreshes status with the shared status freshness window', async () => {
+    const session = await login();
+
+    const response = await call('/api/status', { headers: { host: 'kidcontrol.test', cookie: session.cookie } });
+
+    expect(response.status).toBe(200);
+    expect(powerRefresh.refreshAll).toHaveBeenCalledWith(10_000);
+  });
+
+  it('rejects an unknown claim target before attempting network refresh', async () => {
+    const kid = await login();
+
+    const response = await call('/api/claim', {
+      method: 'POST',
+      headers: { ...headers, cookie: kid.cookie, 'x-csrf-token': kid.body.csrf, 'content-type': 'application/json' },
+      body: '{"deviceId":"missing"}'
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'unknown device' });
+    expect(powerRefresh.refreshDevice).not.toHaveBeenCalled();
+  });
+
+  it('requires a targeted fresh power confirmation before a regular claim', async () => {
+    powerRefresh.refreshDevice.mockImplementation(async (deviceId: string) => {
+      await core.powerChanged(deviceId, 'on');
+      return 'on';
+    });
+    const kid = await login();
+
+    const response = await call('/api/claim', {
+      method: 'POST',
+      headers: { ...headers, cookie: kid.cookie, 'x-csrf-token': kid.body.csrf, 'content-type': 'application/json' },
+      body: '{"deviceId":"tv"}'
+    });
+
+    expect(response.status).toBe(204);
+    expect(powerRefresh.refreshDevice).toHaveBeenCalledWith('tv', 5_000);
+  });
+
+  it('denies a regular claim when targeted refresh explicitly reports off', async () => {
+    await core.powerChanged('tv', 'on');
+    powerRefresh.refreshDevice.mockResolvedValue('off');
+    const kid = await login();
+
+    const response = await call('/api/claim', {
+      method: 'POST',
+      headers: { ...headers, cookie: kid.cookie, 'x-csrf-token': kid.body.csrf, 'content-type': 'application/json' },
+      body: '{"deviceId":"tv"}'
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'Apple TV is not on' });
+  });
+
+  it('fails a regular claim closed when fresh power cannot be obtained', async () => {
+    powerRefresh.refreshDevice.mockRejectedValue(new Error('offline'));
+    const kid = await login();
+
+    const response = await call('/api/claim', {
+      method: 'POST',
+      headers: { ...headers, cookie: kid.cookie, 'x-csrf-token': kid.body.csrf, 'content-type': 'application/json' },
+      body: '{"deviceId":"tv"}'
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'Apple TV is not on' });
+  });
+
   it('rejects a regular claim unless power is confirmed on while allowing a superuser', async () => {
     const kid = await login();
     const denied = await call('/api/claim', {
@@ -304,6 +380,7 @@ describe('hardened HTTP API and local smoke journey', () => {
       body: '{"deviceId":"tv"}'
     });
     expect(allowed.status).toBe(204);
+    expect(powerRefresh.refreshDevice).toHaveBeenCalledTimes(1);
   });
 
   it('rejects oversized Content-Length before reading and configures production timeouts', async () => {

@@ -41,7 +41,7 @@ async function main(): Promise<void> {
   const server = createKidControlServer(config, core, auth, {
     publicDir: new URL('./public/', import.meta.url), iconDir: '/etc/kidcontrol/icons', documentation, publicOrigin: settings.publicOrigin,
     trustedProxyIp: settings.trustedProxyIp
-  });
+  }, monitor);
   await startResources({ core, monitor, server, store }, settings.port, settings.host);
   console.log(`KidControl listening on ${settings.host}:${settings.port}`);
 

@@ -9,6 +9,10 @@ import { RateLimitError, type Auth } from './auth.js';
 import { logOperationalError, logOperationalInfo } from './operational-log.js';
 
 interface Options { publicDir: string | URL; iconDir: string; documentation: string; publicOrigin: string; trustedProxyIp: string; bodyLimitBytes?: number }
+interface PowerRefresh {
+  refreshAll(maxAgeMs?: number): Promise<void>;
+  refreshDevice(deviceId: string, maxAgeMs?: number): Promise<unknown>;
+}
 const COOKIE = '__Host-kidcontrol';
 const securityHeaders = {
   'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer',
@@ -61,7 +65,13 @@ function clientSource(req: IncomingMessage, trustedProxyIp: string): string {
   return normalizedIp(forwarded.trim());
 }
 
-export function createKidControlServer(config: Config, core: KidControl, auth: Auth, options: Options) {
+export function createKidControlServer(
+  config: Config,
+  core: KidControl,
+  auth: Auth,
+  options: Options,
+  powerRefresh: PowerRefresh
+) {
   const publicOrigin = new URL(options.publicOrigin);
   if (publicOrigin.protocol !== 'https:' || publicOrigin.origin !== options.publicOrigin) throw new Error('PUBLIC_ORIGIN must be a canonical HTTPS origin');
   const allowedHost = publicOrigin.host;
@@ -141,6 +151,7 @@ export function createKidControlServer(config: Config, core: KidControl, auth: A
       const user = auth.authenticate(token);
       if (!user) return send(res, 401, { error: 'authentication required' }, { 'Cache-Control': 'no-store' });
       if (method === 'GET' && url.pathname === '/api/status') {
+        await powerRefresh.refreshAll(10_000);
         const state = core.status(user.id);
         return send(res, 200, {
           me: userView(user), remainingSeconds: state.remainingSeconds, unlimited: state.unlimited,
@@ -164,7 +175,19 @@ export function createKidControlServer(config: Config, core: KidControl, auth: A
         return send(res, 204, undefined, { 'Cache-Control': 'no-store', 'Set-Cookie': `${COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0` });
       }
       const input = await body(req, bodyLimit);
-      if (url.pathname === '/api/claim') { await core.start(user.id, String(input.deviceId ?? '')); return send(res, 204, undefined, { 'Cache-Control': 'no-store' }); }
+      if (url.pathname === '/api/claim') {
+        const deviceId = String(input.deviceId ?? '');
+        if (!config.devices.some((device) => device.id === deviceId)) throw new Error('unknown device');
+        if (user.role === 'user') {
+          try {
+            if (await powerRefresh.refreshDevice(deviceId, 5_000) !== 'on') {
+              throw new Error('Apple TV is not on');
+            }
+          } catch { throw new Error('Apple TV is not on'); }
+        }
+        await core.start(user.id, deviceId);
+        return send(res, 204, undefined, { 'Cache-Control': 'no-store' });
+      }
       if (url.pathname === '/api/stop') { await core.stop(user.id); return send(res, 204, undefined, { 'Cache-Control': 'no-store' }); }
       if (url.pathname === '/api/admin/daily-reset') {
         if (user.role !== 'superuser') return send(res, 403, { error: 'superuser required' }, { 'Cache-Control': 'no-store' });

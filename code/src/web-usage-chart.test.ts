@@ -119,7 +119,8 @@ describe('regular-user seven-day usage chart', () => {
     expect(app).toContain('renderUsageChart(undefined)');
     expect(app).toContain('renderOwnUsageChart(undefined)');
     expect(app).toContain("byId('target-options').replaceChildren()");
-    expect(app).toContain('async function refresh(expectedGeneration = sessionGeneration)');
+    expect(app).toContain('async function refreshOnce(expectedGeneration)');
+    expect(app).toContain('function refresh(expectedGeneration = sessionGeneration)');
     expect(app).toContain('if (expectedGeneration !== sessionGeneration) return');
     expect(app).toContain('if (error.status === 401)');
     expect(app).toContain('sessionGeneration += 1');

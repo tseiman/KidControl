@@ -23,7 +23,7 @@
     "vitest": "^4.0.18"
   },
   "allowScripts": {
-    "github:tseiman/node-appletv-remote#918c322fc4405707647ab7d607c837231d6abbd0": true,
-    "esbuild@0.28.1": true
+    "github:tseiman/node-appletv-remote#80f001a06b4e852ec257aef569caf831fddc9b3c": true,
+    "esbuild@0.28.2": true
   }
 }
