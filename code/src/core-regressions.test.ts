@@ -85,6 +85,58 @@ describe('mandatory accounting and reconciliation regressions', () => {
     expect(physical.one).toBe(true);
   });
 
+  it('does not turn an active-session allowance into the idle baseline after a read timeout', async () => {
+    let failNextRead = false;
+    app = new KidControl(config, store, {
+      read: async (id) => {
+        if (id === 'one' && failNextRead) {
+          failNextRead = false;
+          throw new Error('UniFi request timed out');
+        }
+        return physical[id]!;
+      },
+      setBlocked: async (id, blocked) => { writes.push([id, blocked]); physical[id] = blocked; }
+    }, () => now);
+
+    await app.start('a', 'one');
+    failNextRead = true;
+    await app.poll();
+    expect(store.aclState('one')).toMatchObject({ actualBlocked: null, baselineBlocked: true });
+
+    await app.poll();
+    expect(store.aclState('one')).toMatchObject({ actualBlocked: false, baselineBlocked: true, source: 'kidcontrol' });
+
+    now = new Date(now.getTime() + 60_000);
+    await app.poll();
+    expect(store.activeClaims()).toEqual([]);
+    expect(physical.one).toBe(true);
+  });
+
+  it('blocks an exhausted persisted claim before classifying ACL state during recovery', async () => {
+    app = new KidControl(config, store, {
+      read: async (id) => physical[id]!,
+      setBlocked: async (id, blocked) => { writes.push([id, blocked]); physical[id] = blocked; }
+    }, () => now);
+    await app.start('a', 'one');
+    store.setAcl({
+      deviceId: 'one', desiredBlocked: false, actualBlocked: null, baselineBlocked: true,
+      source: 'kidcontrol', pending: false, attempts: 0, lastError: 'UniFi request timed out', nextRetryAt: null,
+      updatedAt: Math.floor(now.getTime() / 1000)
+    });
+
+    now = new Date(now.getTime() + 60_000);
+    writes.length = 0;
+    const restarted = new KidControl(config, store, {
+      read: async (id) => physical[id]!,
+      setBlocked: async (id, blocked) => { writes.push([id, blocked]); physical[id] = blocked; }
+    }, () => now);
+    await restarted.recover();
+
+    expect(store.activeClaims()).toEqual([]);
+    expect(writes).toContainEqual(['one', true]);
+    expect(store.aclState('one')).toMatchObject({ desiredBlocked: true, actualBlocked: true, baselineBlocked: true, source: 'kidcontrol' });
+  });
+
   it('adopts an external block atomically without any UniFi write', async () => {
     await app.start('a', 'one'); await app.start('b', 'one');
     writes.length = 0;

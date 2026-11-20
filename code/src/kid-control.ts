@@ -219,6 +219,15 @@ export class KidControl {
     }
   }
 
+  private confirmClaimAllowanceInternal(deviceId: string, prior: ReturnType<Store['aclState']>): void {
+    this.store.setAcl({
+      deviceId, desiredBlocked: false, actualBlocked: false,
+      baselineBlocked: prior?.baselineBlocked ?? true,
+      source: 'kidcontrol', pending: false, attempts: 0,
+      lastError: null, nextRetryAt: null, updatedAt: this.now()
+    });
+  }
+
   start(userId: string, deviceId: string): Promise<void> { return this.enqueueAfterDailyReset(() => this.startInternal(userId, deviceId)); }
   private async startInternal(userId: string, deviceId: string): Promise<void> {
     const user = this.user(userId);
@@ -382,12 +391,17 @@ export class KidControl {
         affected.add(claim.deviceId);
       }
     }
+    for (const deviceId of affected) {
+      try { await this.reconcileInternal(deviceId); } catch { /* remains pending */ }
+    }
     for (const device of this.config.devices) {
       try {
         const actual = await this.acl.read(device.id);
         const state = this.store.aclState(device.id);
-        if (actual && this.store.claimsOn(device.id).length > 0) {
-          await this.adoptInternal(device.id, true);
+        const hasClaims = this.store.claimsOn(device.id).length > 0;
+        if (hasClaims) {
+          if (actual) await this.adoptInternal(device.id, true);
+          else this.confirmClaimAllowanceInternal(device.id, state);
           continue;
         }
         if (state?.pending) {
@@ -403,9 +417,6 @@ export class KidControl {
           await this.adoptInternal(device.id, actual);
         } else {
           this.store.setAcl({ ...state, actualBlocked: actual, updatedAt: this.now() });
-        }
-        if (affected.has(device.id)) {
-          try { await this.reconcileInternal(device.id); } catch { /* remains pending */ }
         }
       } catch (error) {
         const state = this.store.aclState(device.id);
@@ -429,8 +440,10 @@ export class KidControl {
       try {
         const actual = await this.acl.read(device.id);
         const state = this.store.aclState(device.id);
-        if (actual && this.store.claimsOn(device.id).length > 0) {
-          await this.adoptInternal(device.id, true);
+        const hasClaims = this.store.claimsOn(device.id).length > 0;
+        if (hasClaims) {
+          if (actual) await this.adoptInternal(device.id, true);
+          else this.confirmClaimAllowanceInternal(device.id, state);
         } else if (state?.pending) {
           if (actual === state.desiredBlocked) {
             this.store.setAcl({ ...state, actualBlocked: actual, source: 'kidcontrol', pending: false, attempts: 0, lastError: null, nextRetryAt: null, updatedAt: this.now() });
